@@ -1,0 +1,47 @@
+# plugins/auto_move_organized.yml
+
+name: Auto Move Organized
+description: >
+  在场景更新后，把已整理(organized)的文件移动到指定目录，并按模板重命名。
+  也可以从 Tasks 页面手动触发。
+
+version: "0.1.0"
+url: https://example.com/auto-move-organized
+
+# UI 设置：在设置 -> 插件 -> 本插件 里会显示
+settings:
+  target_root:
+    displayName: 目标根目录（移动到此目录下）
+    type: STRING
+  filename_template:
+    displayName: 命名模板（相对 target_root 的路径+文件名）
+    type: STRING
+  move_only_organized:
+    displayName: 只移动「已整理」文件
+    type: BOOLEAN
+  dry_run:
+    displayName: 仅模拟（不真的移动）
+    type: BOOLEAN
+
+# 外部脚本调用方式
+exec:
+  - python
+  - "{pluginDir}/auto_move_organized.py"
+
+# 原始 JSON 输入
+interface: raw
+
+# 错误日志级别
+errLog: info
+
+tasks:
+  - name: run
+    description: 手动执行：根据设置移动选中场景（或在 args.sceneIds 指定的场景）
+    defaultArgs: {}
+
+hooks:
+  - name: run
+    description: 在场景更新后自动移动该场景下的已整理文件
+    triggeredBy:
+      - Scene.Update.Post
+    defaultArgs: {}
