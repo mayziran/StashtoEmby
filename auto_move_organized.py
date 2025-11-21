@@ -226,9 +226,9 @@ def build_template_vars(scene: Dict[str, Any], file_path: str) -> Dict[str, Any]
 
 
 def build_target_path(
-    scene: Dict[str, Any],
-    file_path: str,
-    settings: Dict[str, Any],
+        scene: Dict[str, Any],
+        file_path: str,
+        settings: Dict[str, Any],
 ) -> str:
     """
     根据模板生成目标路径（绝对路径）。
@@ -360,11 +360,11 @@ def process_scene(scene: Dict[str, Any], settings: Dict[str, Any]) -> int:
             continue
 
         if move_file(scene, f, settings):
-
             moved_count += 1
 
     log.info(f"Scene {scene_id}: moved {moved_count} files")
     return moved_count
+
 
 def get_all_scenes(stash: StashInterface, per_page: int = 1000) -> List[Dict[str, Any]]:
     """
@@ -574,8 +574,9 @@ def write_nfo_for_scene(video_path: str, scene: Dict[str, Any], settings: Dict[s
     urls = scene.get("urls") or []
     url0 = urls[0] if urls else ""
 
-    # 片长（分钟）
+    # 片长（分钟）以及用于 fileinfo 的文件对象
     runtime_minutes = ""
+    file_for_info: Dict[str, Any] | None = None
     for f in scene.get("files") or []:
         if not isinstance(f, dict):
             continue
@@ -585,6 +586,7 @@ def write_nfo_for_scene(video_path: str, scene: Dict[str, Any], settings: Dict[s
                 runtime_minutes = str(int(round(float(dur) / 60)))
             except Exception:
                 runtime_minutes = ""
+            file_for_info = f
             break
 
     # 标签 / 类型
@@ -634,6 +636,57 @@ def write_nfo_for_scene(video_path: str, scene: Dict[str, Any], settings: Dict[s
     if rating:
         _set_text("rating", rating)
     _set_text("url", url0)
+
+    # fileinfo / streamdetails（供 Emby/Kodi 使用的文件技术信息）
+    def _set_child(parent: ET.Element, tag: str, value: Any) -> None:
+        if value is None:
+            return
+        value = str(value).strip()
+        if not value:
+            return
+        el = ET.SubElement(parent, tag)
+        el.text = value
+
+    if file_for_info:
+        fileinfo_el = ET.SubElement(root, "fileinfo")
+        sd_el = ET.SubElement(fileinfo_el, "streamdetails")
+
+        # video
+        video_el = ET.SubElement(sd_el, "video")
+        width = file_for_info.get("width")
+        height = file_for_info.get("height")
+        duration_seconds = None
+        try:
+            if file_for_info.get("duration"):
+                duration_seconds = int(round(float(file_for_info["duration"])))
+        except Exception:
+            duration_seconds = None
+
+        bitrate_kbps = None
+        try:
+            if file_for_info.get("bit_rate"):
+                bitrate_kbps = int(round(float(file_for_info["bit_rate"]) / 1000))
+        except Exception:
+            bitrate_kbps = None
+
+        aspect = None
+        try:
+            if width and height:
+                aspect = f"{float(width) / float(height):.3f}"
+        except Exception:
+            aspect = None
+
+        _set_child(video_el, "codec", file_for_info.get("video_codec"))
+        _set_child(video_el, "width", width)
+        _set_child(video_el, "height", height)
+        _set_child(video_el, "aspect", aspect)
+        _set_child(video_el, "durationinseconds", duration_seconds)
+        _set_child(video_el, "bitrate", bitrate_kbps)
+        _set_child(video_el, "filesize", file_for_info.get("size"))
+
+        # audio
+        audio_el = ET.SubElement(sd_el, "audio")
+        _set_child(audio_el, "codec", file_for_info.get("audio_codec"))
 
     # genre / tag：用 tags.name 填充
     for name in tag_names:
@@ -699,7 +752,8 @@ def download_scene_art(video_path: str, scene: Dict[str, Any], settings: Dict[st
         return
 
     video_dir = os.path.dirname(video_path)
-    dst_poster = os.path.join(video_dir, "folder.jpg")
+    base_name = os.path.splitext(os.path.basename(video_path))[0]
+    dst_poster = os.path.join(video_dir, f"{base_name}-poster.jpg")
 
     abs_url = build_absolute_url(poster_url, settings)
 
@@ -830,7 +884,7 @@ def handle_hook_or_task(stash: StashInterface, args: Dict[str, Any], settings: D
         log.info(f"Processing organized scene id={sid} title={scene.get('title')!r}")
         moved = process_scene(scene, settings)
         total_moved += moved
-        break #单个完成后打断, 方便调试
+        break  # 单个完成后打断, 方便调试
 
     msg = (
         f"Scanned {total_scenes} scenes, "
@@ -839,8 +893,6 @@ def handle_hook_or_task(stash: StashInterface, args: Dict[str, Any], settings: D
     )
     log.info(f"[{PLUGIN_ID}] {msg}")
     return msg
-
-
 
 
 def read_input_file():
@@ -859,7 +911,7 @@ def main():
         out = {"error": "Missing server_connection in input"}
         print(json.dumps(out))
         return
-    
+
     if server_conn.get("Host") == '0.0.0.0':
         server_conn["Host"] = "localhost"
 
