@@ -5,7 +5,7 @@ description: >
   在场景更新后，把已整理(organized)的文件移动到指定目录，并按模板重命名。
   也可以从 Tasks 页面手动触发。
 
-version: "0.1.0"
+version: "0.1.1"
 url: https://example.com/auto-move-organized
 
 # UI 设置：在设置 -> 插件 -> 本插件 里会显示
@@ -21,6 +21,15 @@ settings:
     type: BOOLEAN
   dry_run:
     displayName: 仅模拟（不真的移动）
+    type: BOOLEAN
+  write_nfo:
+    displayName: 生成 NFO 文件
+    type: BOOLEAN
+  download_poster:
+    displayName: 下载封面图到视频目录
+    type: BOOLEAN
+  download_actor_images:
+    displayName: 下载演员图片到 actors 目录
     type: BOOLEAN
 
 # 外部脚本调用方式

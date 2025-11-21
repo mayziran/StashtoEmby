@@ -6,8 +6,10 @@ import os
 import re
 import shutil
 import sys
+import xml.etree.ElementTree as ET
 from typing import Dict, Any, List
 
+import requests
 import stashapi.log as log
 from stashapi.stashapp import StashInterface
 
@@ -70,10 +72,15 @@ def load_settings(stash: StashInterface) -> Dict[str, Any]:
     filename_template = _get_val("filename_template", "{original_basename}")
     move_only_org = bool(_get_val("move_only_organized", True))
     dry_run = bool(_get_val("dry_run", False))
+    write_nfo = bool(_get_val("write_nfo", True))
+    download_poster = bool(_get_val("download_poster", True))
+    download_actor_images = bool(_get_val("download_actor_images", True))
 
     log.info(
         f"Loaded settings: target_root='{target_root}', "
-        f"template='{filename_template}', move_only_organized={move_only_org}, dry_run={dry_run}"
+        f"template='{filename_template}', move_only_organized={move_only_org}, "
+        f"dry_run={dry_run}, write_nfo={write_nfo}, "
+        f"download_poster={download_poster}, download_actor_images={download_actor_images}"
     )
 
     return {
@@ -81,6 +88,9 @@ def load_settings(stash: StashInterface) -> Dict[str, Any]:
         "filename_template": filename_template,
         "move_only_organized": move_only_org,
         "dry_run": dry_run,
+        "write_nfo": write_nfo,
+        "download_poster": download_poster,
+        "download_actor_images": download_actor_images,
     }
 
 
@@ -96,43 +106,35 @@ def safe_segment(segment: str) -> str:
     return segment or "_"
 
 
-def build_target_path(
-    scene: Dict[str, Any],
-    file_path: str,
-    settings: Dict[str, Any],
-) -> str:
+def build_absolute_url(url: str, settings: Dict[str, Any]) -> str:
     """
-    根据模板生成目标路径（绝对路径）。
-
-    常用占位符示例（不完全列表，实际以 vars_map 为准）：
-      {id}                -> scene id
-      {scene_title}       -> 场景标题
-      {scene_date}        -> 场景日期（原始字符串，例如 2025-01-02）
-      {date_year}         -> 场景年份（从 scene_date 拆出）
-      {date_month}        -> 场景月份（两位）
-      {date_day}          -> 场景日期（两位）
-      {studio}            -> Studio 名
-      {studio_name}       -> Studio 名（同 {studio}）
-      {studio_id}         -> Studio ID
-      {code}              -> 场景 code
-      {director}          -> 导演
-      {performers}        -> Performer 名（-分隔）
-      {first_performer}   -> 第一个 Performer 名
-      {performer_count}   -> Performer 数量
-      {tag_names}         -> 标签名（逗号分隔）
-      {group_name}        -> 第一个分组名（若有）
-      {original_basename} -> 原始文件名（含扩展名）
-      {original_name}     -> 原始文件名（不含扩展名）
-      {ext}               -> 扩展名（不含点）
+    把相对路径补全为带协议/主机的绝对 URL，方便下载图片。
     """
+    if not url:
+        return url
+    if url.startswith("http://") or url.startswith("https://"):
+        return url
 
-    target_root = settings["target_root"].strip()
-    template = settings["filename_template"].strip()
+    server_conn = settings.get("server_connection") or {}
+    scheme = server_conn.get("Scheme", "http")
+    host = server_conn.get("Host", "localhost")
+    port = server_conn.get("Port")
 
-    if not target_root:
-        raise RuntimeError("目标目录(target_root)未配置")
+    base = f"{scheme}://{host}"
+    if port:
+        base = f"{base}:{port}"
 
-    # 解析文件名
+    if not url.startswith("/"):
+        url = "/" + url
+
+    return base + url
+
+
+def build_template_vars(scene: Dict[str, Any], file_path: str) -> Dict[str, Any]:
+    """
+    根据 scene 信息和文件路径构建一份变量字典，
+    既用于路径模板，也可用于 NFO 等其它场景。
+    """
     original_basename = os.path.basename(file_path)
     original_name, ext = os.path.splitext(original_basename)
     ext = ext.lstrip(".")
@@ -163,7 +165,7 @@ def build_target_path(
         if isinstance(p, dict) and p.get("name"):
             performer_names.append(p["name"])
 
-    performers_str = "- ".join(performer_names)
+    performers_str = ", ".join(performer_names)
     first_performer = performer_names[0] if performer_names else ""
     performer_count = len(performer_names)
 
@@ -188,7 +190,15 @@ def build_target_path(
     rating100 = scene.get("rating100")
     rating = "" if rating100 is None else str(rating100)
 
-    vars_map = {
+    # 可能的外部 ID（例如 stashdb）
+    external_id = ""
+    stash_ids = scene.get("stash_ids") or []
+    if stash_ids and isinstance(stash_ids, list):
+        s0 = stash_ids[0]
+        if isinstance(s0, dict):
+            external_id = s0.get("stash_id") or ""
+
+    return {
         "id": scene_id,
         "scene_title": scene_title,
         "scene_date": scene_date,
@@ -211,7 +221,49 @@ def build_target_path(
         "original_basename": original_basename,
         "original_name": original_name,
         "ext": ext,
+        "external_id": external_id,
     }
+
+
+def build_target_path(
+    scene: Dict[str, Any],
+    file_path: str,
+    settings: Dict[str, Any],
+) -> str:
+    """
+    根据模板生成目标路径（绝对路径）。
+
+    常用占位符示例（不完全列表，实际以 build_template_vars 返回为准）：
+      {id}                -> scene id
+      {scene_title}       -> 场景标题
+      {scene_date}        -> 场景日期（原始字符串，例如 2025-01-02）
+      {date_year}         -> 场景年份
+      {date_month}        -> 场景月份（两位）
+      {date_day}          -> 场景日期（两位）
+      {studio} / {studio_name}
+      {studio_id}
+      {code}
+      {director}
+      {performers}
+      {first_performer}
+      {performer_count}
+      {tag_names} / {tags}
+      {group_name}
+      {rating} / {rating100}
+      {original_basename}
+      {original_name}
+      {ext}
+    """
+
+    target_root = settings["target_root"].strip()
+    template = settings["filename_template"].strip()
+
+    if not target_root:
+        raise RuntimeError("目标目录(target_root)未配置")
+
+    vars_map = build_template_vars(scene, file_path)
+    original_basename = vars_map["original_basename"]
+    ext = vars_map["ext"]
 
     # 先做模板替换
     try:
@@ -262,11 +314,15 @@ def move_file(scene: Dict[str, Any], file_obj: Dict[str, Any], settings: Dict[st
 
     dst_dir = os.path.dirname(dst)
     try:
-        if not settings["dry_run"]:
+        if not settings.get("dry_run"):
             os.makedirs(dst_dir, exist_ok=True)
-            # 使用 replace 确保跨设备也能工作（Python 会自动选择 copy+remove）
+            # 使用 move 确保跨设备也能工作（Python 会自动选择 copy+remove）
             shutil.move(src, dst)
-        log.info(f"Moved file: '{src}' -> '{dst}' (dry_run={settings['dry_run']})")
+        try:
+            post_process_moved_file(dst, scene, settings)
+        except Exception as post_e:
+            log.error(f"移动后处理失败 '{dst}': {post_e}")
+        log.info(f"Moved file: '{src}' -> '{dst}' (dry_run={settings.get('dry_run')})")
         return True
     except Exception as e:
         log.error(f"移动文件失败 '{src}' -> '{dst}': {e}")
@@ -449,6 +505,214 @@ def get_all_scenes(stash: StashInterface, per_page: int = 1000) -> List[Dict[str
     return all_scenes
 
 
+def _build_requests_session(settings: Dict[str, Any]) -> requests.Session:
+    """
+    基于 server_connection 构建一个带 SessionCookie 的 requests 会话，
+    用于从 Stash 下载截图和演员图片。
+    """
+    server_conn = settings.get("server_connection") or {}
+    session = requests.Session()
+
+    cookie = server_conn.get("SessionCookie") or {}
+    name = cookie.get("Name") or cookie.get("name")
+    value = cookie.get("Value") or cookie.get("value")
+    domain = cookie.get("Domain") or cookie.get("domain")
+    path = cookie.get("Path") or cookie.get("path") or "/"
+
+    if name and value:
+        cookie_kwargs = {"path": path or "/"}
+        if domain:
+            cookie_kwargs["domain"] = domain
+        session.cookies.set(name, value, **cookie_kwargs)
+
+    return session
+
+
+def _download_binary(url: str, dst_path: str, settings: Dict[str, Any]) -> bool:
+    """
+    从 Stash（或其它 HTTP 源）下载二进制文件到指定路径。
+    """
+    if not url:
+        return False
+
+    url = build_absolute_url(url, settings)
+    session = _build_requests_session(settings)
+
+    try:
+        resp = session.get(url, timeout=30, stream=True)
+        resp.raise_for_status()
+        os.makedirs(os.path.dirname(dst_path), exist_ok=True)
+        with open(dst_path, "wb") as f:
+            for chunk in resp.iter_content(chunk_size=8192):
+                if chunk:
+                    f.write(chunk)
+        log.info(f"Downloaded '{url}' -> '{dst_path}'")
+        return True
+    except Exception as e:
+        log.error(f"下载失败 '{url}' -> '{dst_path}': {e}")
+        return False
+
+
+def write_nfo_for_scene(video_path: str, scene: Dict[str, Any], settings: Dict[str, Any]) -> None:
+    """
+    把 scene 的详细信息写成 Emby/Kodi 兼容的 movie NFO，放在视频同名 .nfo 文件里。
+    """
+    if not settings.get("write_nfo", True):
+        return
+
+    vars_map = build_template_vars(scene, video_path)
+    title = vars_map.get("scene_title") or vars_map.get("original_name") or os.path.basename(video_path)
+    plot = scene.get("details") or ""
+    studio = vars_map.get("studio_name") or ""
+    director = vars_map.get("director") or ""
+    date = vars_map.get("scene_date") or ""
+    year = vars_map.get("date_year") or ""
+    code = vars_map.get("code") or ""
+    rating = vars_map.get("rating")
+    external_id = vars_map.get("external_id") or ""
+    urls = scene.get("urls") or []
+    url0 = urls[0] if urls else ""
+
+    root = ET.Element("movie")
+
+    def _set_text(tag: str, value: str) -> None:
+        if value is None:
+            return
+        value = str(value).strip()
+        if not value:
+            return
+        el = ET.SubElement(root, tag)
+        el.text = value
+
+    _set_text("title", title)
+    _set_text("sorttitle", title)
+    _set_text("year", year)
+    _set_text("premiered", date)
+    _set_text("plot", plot)
+    _set_text("studio", studio)
+    _set_text("director", director)
+    _set_text("id", external_id or str(vars_map.get("id") or ""))
+    _set_text("code", code)
+    if rating:
+        _set_text("rating", rating)
+    _set_text("url", url0)
+
+    # 演员列表
+    performers = scene.get("performers") or []
+    for p in performers:
+        if not isinstance(p, dict):
+            continue
+        name = p.get("name")
+        if not name:
+            continue
+        actor_el = ET.SubElement(root, "actor")
+        name_el = ET.SubElement(actor_el, "name")
+        name_el.text = name
+
+    nfo_path = os.path.splitext(video_path)[0] + ".nfo"
+
+    if settings.get("dry_run"):
+        try:
+            xml_str = ET.tostring(root, encoding="unicode")
+        except Exception:
+            xml_str = "<movie>...</movie>"
+        log.info(f"[dry_run] Would write NFO for scene {vars_map.get('id')} -> {nfo_path}")
+        log.info(xml_str)
+        return
+
+    tree = ET.ElementTree(root)
+    try:
+        os.makedirs(os.path.dirname(nfo_path), exist_ok=True)
+        tree.write(nfo_path, encoding="utf-8", xml_declaration=True)
+        log.info(f"Wrote NFO for scene {vars_map.get('id')} -> {nfo_path}")
+    except Exception as e:
+        log.error(f"写入 NFO 失败 '{nfo_path}': {e}")
+
+
+def download_scene_art(video_path: str, scene: Dict[str, Any], settings: Dict[str, Any]) -> None:
+    """
+    下载场景封面图到视频所在目录，命名成 Emby 常见格式（folder.jpg）。
+    """
+    if not settings.get("download_poster", True):
+        return
+
+    paths = scene.get("paths") or {}
+    poster_url = paths.get("screenshot") or paths.get("webp") or ""
+    if not poster_url:
+        log.warning("Scene has no screenshot/webp path, skip poster download")
+        return
+
+    video_dir = os.path.dirname(video_path)
+    dst_poster = os.path.join(video_dir, "folder.jpg")
+
+    abs_url = build_absolute_url(poster_url, settings)
+
+    if settings.get("dry_run"):
+        log.info(f"[dry_run] Would download poster: '{abs_url}' -> '{dst_poster}'")
+        return
+
+    if os.path.exists(dst_poster):
+        log.info(f"Poster already exists, skip: {dst_poster}")
+        return
+
+    _download_binary(abs_url, dst_poster, settings)
+
+
+def download_actor_images(scene: Dict[str, Any], settings: Dict[str, Any]) -> None:
+    """
+    把演员图片下载到 {target_root}/actors/ 目录下，文件名为演员名（清洗过）。
+    """
+    if not settings.get("download_actor_images", True):
+        return
+
+    performers = scene.get("performers") or []
+    if not performers:
+        return
+
+    target_root = settings.get("target_root", "").strip()
+    if not target_root:
+        log.warning("target_root 未配置，无法保存演员图片")
+        return
+
+    actors_root = os.path.join(target_root, "actors")
+    if not settings.get("dry_run"):
+        os.makedirs(actors_root, exist_ok=True)
+
+    for p in performers:
+        if not isinstance(p, dict):
+            continue
+        name = p.get("name")
+        image_url = p.get("image_path")
+        if not name or not image_url:
+            continue
+
+        filename = f"{safe_segment(name)}.jpg"
+        dst_path = os.path.join(actors_root, filename)
+        abs_url = build_absolute_url(image_url, settings)
+
+        if settings.get("dry_run"):
+            log.info(f"[dry_run] Would download actor image: '{abs_url}' -> '{dst_path}'")
+            continue
+
+        if os.path.exists(dst_path):
+            log.info(f"Actor image already exists, skip: {dst_path}")
+            continue
+
+        _download_binary(abs_url, dst_path, settings)
+
+
+def post_process_moved_file(dst_video_path: str, scene: Dict[str, Any], settings: Dict[str, Any]) -> None:
+    """
+    文件移动之后的后续处理：
+    1. 写 NFO
+    2. 下载场景封面图到视频目录（folder.jpg）
+    3. 下载演员头像到 {target_root}/actors/
+    """
+    write_nfo_for_scene(dst_video_path, scene, settings)
+    download_scene_art(dst_video_path, scene, settings)
+    download_actor_images(scene, settings)
+
+
 def handle_hook_or_task(stash: StashInterface, args: Dict[str, Any], settings: Dict[str, Any]) -> str:
     """
     统一入口：
@@ -500,8 +764,8 @@ def handle_hook_or_task(stash: StashInterface, args: Dict[str, Any], settings: D
         total_scenes += 1
         sid = int(scene["id"])
         # 保存json, 调试用
-        with open(f'scene-{sid}.json', 'w', encoding='utf-8') as f:
-            json.dump(scene, f, indent=2, ensure_ascii=False)
+        # with open(f'scene-{sid}.json', 'w', encoding='utf-8') as f:
+        #     json.dump(scene, f, indent=2, ensure_ascii=False)
 
         if not scene.get("organized"):
             continue
@@ -528,8 +792,8 @@ def read_input_file():
 
 
 def main():
-    # json_input = read_input()  # 插件运行时从 stdin 读
-    json_input = read_input_file()  # 调试时从文件读
+    json_input = read_input()  # 插件运行时从 stdin 读
+    # json_input = read_input_file()  # 调试时从文件读
     print(json_input)
     log.info(f"Plugin input: {json_input}")
     server_conn = json_input.get("server_connection") or {}
@@ -546,9 +810,8 @@ def main():
 
     stash = connect_stash(server_conn)
     settings = load_settings(stash)
-
-    # with open('settings.json', 'w', encoding='utf-8') as f:
-    #     json.dump(settings, f, indent=2, ensure_ascii=False)
+    # 把 server_connection 也塞到 settings 里，方便下载图片等功能使用 cookie
+    settings["server_connection"] = server_conn
 
     try:
         msg = handle_hook_or_task(stash, args, settings)
