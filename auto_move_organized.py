@@ -686,11 +686,9 @@ def write_nfo_for_scene(video_path: str, scene: Dict[str, Any], settings: Dict[s
         final_plot = translated_plot
 
     # 构造 NFO <title>:
-    # 未翻译: {studio}.{scene_date}.{scene_title}
-    # 翻译成功: {studio}.{scene_date}.{scene_title}.{chinese_title}
-    base_parts = [studio, date, title]
-    base_parts = [p for p in base_parts if p]
-    base_title = ".".join(base_parts) if base_parts else title
+    # 未翻译: {scene_title}
+    # 翻译成功: {scene_title}.{chinese_title}
+    base_title = title
     if translated_title:
         title_for_nfo = f"{base_title}.{translated_title}"
     else:
