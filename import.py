@@ -3,6 +3,7 @@ import json
 import os
 import xml.etree.ElementTree as ET
 from urllib.parse import quote
+from datetime import datetime, timezone
 
 import requests
 
@@ -18,6 +19,7 @@ class App:
         self.actor_id = None
         self.file_path = None
         self.actor_info = None
+        self.emby_user_id = None
 
     def get_actor_name(self):
         # 获取程序当前文件夹路径
@@ -192,30 +194,51 @@ class App:
         if not self.actor_info:
             return
 
-        # 模拟 Emby Web：POST /emby/Items/{Id}
-        url = f'{self.emby_server}/emby/Items/{self.actor_id}?api_key={self.api_key}'
-        data = {
-            'Id': self.actor_id,
-            'Name': self.actor_name,
-            'Type': 'Person',
-        }
+        # 先获取一个用户 ID，用于获取完整的 Item 对象
+        if not self.emby_user_id:
+            try:
+                users_url = f"{self.emby_server}/emby/Users?api_key={self.api_key}"
+                r_users = requests.get(users_url)
+                r_users.raise_for_status()
+                users = r_users.json()
+                if not users:
+                    print("未获取到任何 Emby 用户，无法更新元数据")
+                    self.fail_list.append("获取 Emby 用户列表失败")
+                    return
+                # 默认使用第一个用户
+                self.emby_user_id = users[0].get("Id")
+            except Exception as e:
+                print("获取 Emby 用户列表失败：", e)
+                self.fail_list.append("获取 Emby 用户列表失败")
+                return
+
+        # 通过 /Users/{UserId}/Items/{Id} 获取完整的演员对象
+        try:
+            item_url = f"{self.emby_server}/emby/Users/{self.emby_user_id}/Items/{self.actor_id}?api_key={self.api_key}"
+            r_item = requests.get(item_url)
+            r_item.raise_for_status()
+            data = r_item.json()
+        except Exception as e:
+            print("获取演员信息失败：", self.actor_name, e)
+            self.fail_list.append("获取演员信息失败 " + self.actor_name)
+            return
 
         # 把各字段整理成一段 Overview 文本，方便在 Emby 中查看
         lines = []
         if self.actor_info.get('disambiguation'):
             lines.append(self.actor_info['disambiguation'])
         if self.actor_info.get('gender'):
-            lines.append('Gender: ' + self.actor_info['gender'])
+            lines.append("性别: " + self.actor_info["gender"])
         if self.actor_info.get('country'):
-            lines.append('Country: ' + self.actor_info['country'])
+            lines.append("国家: " + self.actor_info["country"])
         if self.actor_info.get('birthdate'):
-            lines.append('Birthdate: ' + self.actor_info['birthdate'])
+            lines.append("出生日期: " + self.actor_info["birthdate"])
         if self.actor_info.get('height_cm'):
-            lines.append('Height: ' + self.actor_info['height_cm'] + ' cm')
+            lines.append("身高: " + self.actor_info["height_cm"] + " cm")
         if self.actor_info.get('measurements'):
-            lines.append('Measurements: ' + self.actor_info['measurements'])
+            lines.append("三围尺寸: " + self.actor_info["measurements"])
         if self.actor_info.get('fake_tits'):
-            lines.append('Fake tits: ' + self.actor_info['fake_tits'])
+            lines.append("假胸: " + self.actor_info["fake_tits"])
 
         if lines:
             overview = '\n'.join(lines)
@@ -223,15 +246,28 @@ class App:
 
         # 可选：把生日的年份写入 ProductionYear，便于按年份筛选
         if self.actor_info.get('birthdate'):
-            try:
-                year = int(self.actor_info['birthdate'][:4])
-            except Exception:
-                year = None
-            if year:
-                data['ProductionYear'] = year
+            birthdate = self.actor_info.get("birthdate")
+            if birthdate:
+                try:
+                    dt = datetime.strptime(birthdate, "%Y-%m-%d").replace(
+                        hour=0, minute=0, second=0, microsecond=0, tzinfo=timezone.utc
+                    )
+                    data["PremiereDate"] = dt.isoformat(
+                        timespec="milliseconds"
+                    ).replace("+00:00", "Z")
+                except Exception:
+                    # 如果格式不对，跳过（保持原来的行为）
+                    data["PremiereDate"] = None
+            country = self.actor_info.get("country")
+            if country:
+                data["ProductionLocations"] = [country]
 
+        # 模拟 Emby Web：POST /emby/Items/{Id}，提交完整对象
+        post_url = (
+            f"{self.emby_server}/emby/Items/{self.actor_id}?api_key={self.api_key}"
+        )
         try:
-            r2 = requests.post(url, json=data)
+            r2 = requests.post(post_url, json=data)
             r2.raise_for_status()
             print('元数据更新成功')
         except Exception as e:
