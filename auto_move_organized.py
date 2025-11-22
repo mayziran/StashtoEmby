@@ -7,15 +7,37 @@ import re
 import shutil
 import sys
 import xml.etree.ElementTree as ET
-from typing import Dict, Any, List
+from typing import Any, Dict, List
 
 import requests
 import stashapi.log as log
-from stashapi.stashapp import StashInterface
 from ai_translate import translate_title_and_plot
+from stashapi.stashapp import StashInterface
 
 # 必须和 YAML 里的 id 对应
 PLUGIN_ID = "auto-move-organized"
+
+
+def task_log(message: str, progress: float | None = None) -> None:
+    """
+    向 Stash Task 界面输出一行 JSON 日志，可选带 progress（0~1）。
+    """
+    try:
+        payload: Dict[str, Any] = {"output": str(message)}
+        if progress is not None:
+            try:
+                p = float(progress)
+                if p < 0:
+                    p = 0.0
+                if p > 1:
+                    p = 1.0
+                payload["progress"] = p
+            except Exception:
+                pass
+        print(json.dumps(payload), flush=True)
+    except Exception as e:
+        # 不能因为日志输出失败导致任务崩溃
+        log.error(f"[{PLUGIN_ID}] Failed to write task log: {e}")
 
 
 def read_input() -> Dict[str, Any]:
@@ -645,6 +667,7 @@ def write_nfo_for_scene(video_path: str, scene: Dict[str, Any], settings: Dict[s
     # AI 翻译（可选）
     translated_title = None
     translated_plot = None
+    task_log("Start translating scene title and plot, It will take a long time")
     try:
         translated_title, translated_plot = translate_title_and_plot(
             title=title,
@@ -988,10 +1011,15 @@ def handle_hook_or_task(stash: StashInterface, args: Dict[str, Any], settings: D
     hook_ctx = (args or {}).get("hookContext") or {}
     scene_id = hook_ctx.get("id") or hook_ctx.get("scene_id")
 
+    # 1) Hook 模式：只处理单个 scene（通常从 Scene.Update.Post 触发）
     if scene_id is not None:
-        with open(f"hook_ctx-{scene_id}.json", "w", encoding="utf-8") as f:
-            json.dump(hook_ctx, f, indent=2, ensure_ascii=False)
+        try:
+            with open(f"hook_ctx-{scene_id}.json", "w", encoding="utf-8") as f:
+                json.dump(hook_ctx, f, indent=2, ensure_ascii=False)
+        except Exception:
+            pass
         return f"Processed scene {scene_id}, Hook 场景保存日志直接返回"
+
         scene_id = int(scene_id)
         log.info(f"[{PLUGIN_ID}] Hook mode, processing single scene id={scene_id}")
 
@@ -1002,41 +1030,59 @@ def handle_hook_or_task(stash: StashInterface, args: Dict[str, Any], settings: D
             title
             date
             studio { name }
-            performers { name }
+            performers { name id image_path gender country birthdate height_cm measurements fake_tits disambiguation }
             files { id path }
         """)
 
         if not scene:
-            return f"Scene {scene_id} not found"
+            msg = f"Scene {scene_id} not found"
+            task_log(msg, progress=1.0)
+            return msg
 
         if not scene.get("organized"):
-            log.info(f"Scene {scene_id} is not organized=True, skip")
-            return f"Scene {scene_id} not organized, skipped"
+            msg = f"Scene {scene_id} not organized, skipped"
+            log.info(msg)
+            task_log(msg, progress=1.0)
+            return msg
 
         moved = process_scene(scene, settings)
-        return f"Processed scene {scene_id}, moved {moved} file(s), dry_run={dry_run}"
+        msg = f"Processed scene {scene_id}, moved {moved} file(s), dry_run={dry_run}"
+        log.info(msg)
+        task_log(msg, progress=1.0)
+        return msg
 
-    # 2) Task 场景：遍历所有 scene
+    # 2) Task 模式：遍历所有 scene
     log.info(f"[{PLUGIN_ID}] Task mode '{mode}': scanning all scenes and moving organized=True ones")
+    task_log(f"[Task] Scanning scenes (mode={mode}, dry_run={dry_run})", progress=0.0)
 
-    total_scenes = 0
+    scenes = get_all_scenes(stash, per_page=int(settings.get("per_page", 1000)))
+    total_scenes = len(scenes)
     organized_scenes = 0
     total_moved = 0
 
-    scenes = get_all_scenes(stash, per_page=int(settings.get("per_page", 1000)))
+    if total_scenes == 0:
+        msg = "No scenes found"
+        log.info(f"[{PLUGIN_ID}] {msg}")
+        task_log(msg, progress=1.0)
+        return msg
 
-    for scene in scenes:
-        total_scenes += 1
+    for index, scene in enumerate(scenes, start=1):
         sid = int(scene["id"])
-        # 保存json, 调试用
+        # 保存json, 调试用（如不需要可保持注释状态）
         # with open(f'scene-{sid}.json', 'w', encoding='utf-8') as f:
         #     json.dump(scene, f, indent=2, ensure_ascii=False)
 
         if not scene.get("organized"):
+            # 仍然更新一下进度条
+            progress = index / total_scenes
+            task_log(f"Skipping unorganized scene {sid} ({index}/{total_scenes})", progress=progress)
             continue
 
         organized_scenes += 1
         log.info(f"Processing organized scene id={sid} title={scene.get('title')!r}")
+        progress = index / total_scenes
+        task_log(f"Processing scene {sid} ({index}/{total_scenes})", progress=progress)
+
         moved = process_scene(scene, settings)
         total_moved += moved
         # break  # 单个完成后打断, 方便调试
@@ -1047,6 +1093,7 @@ def handle_hook_or_task(stash: StashInterface, args: Dict[str, Any], settings: D
         f"moved files: {total_moved}, dry_run={dry_run}"
     )
     log.info(f"[{PLUGIN_ID}] {msg}")
+    task_log(msg, progress=1.0)
     return msg
 
 
@@ -1082,7 +1129,7 @@ def main():
 
     try:
         msg = handle_hook_or_task(stash, args, settings)
-        out = {"output": msg}
+        out = {"output": msg, "progress": 1.0}
     except Exception as e:
         log.error(f"Plugin execution failed: {e}")
         out = {"error": str(e)}

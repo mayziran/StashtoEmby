@@ -83,7 +83,7 @@ def _call_openai_compatible_api_for_text(
     }
 
     try:
-        resp = requests.post(api_url, headers=headers, json=body, timeout=60)
+        resp = requests.post(api_url, headers=headers, json=body, timeout=30)
         resp.raise_for_status()
         data = resp.json()
     except Exception as e:
