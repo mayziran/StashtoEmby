@@ -64,8 +64,8 @@ def load_settings(stash: StashInterface) -> Dict[str, Any]:
     plugins_settings = cfg.get("plugins", {}).get("auto_move_organized", {})
 
     # 保存一份到本地，便于调试
-    with open("auto_move_organized_plugins_settings.json", "w", encoding="utf-8") as f:
-        json.dump(plugins_settings, f, ensure_ascii=False, indent=4)
+    # with open("auto_move_organized_plugins_settings.json", "w", encoding="utf-8") as f:
+    #     json.dump(plugins_settings, f, ensure_ascii=False, indent=4)
 
     def _get_val(key: str, default):
         v = plugins_settings.get(key, default)
@@ -945,7 +945,7 @@ def handle_hook_or_task(stash: StashInterface, args: Dict[str, Any], settings: D
         log.info(f"Processing organized scene id={sid} title={scene.get('title')!r}")
         moved = process_scene(scene, settings)
         total_moved += moved
-        break  # 单个完成后打断, 方便调试
+        # break  # 单个完成后打断, 方便调试
 
     msg = (
         f"Scanned {total_scenes} scenes, "
@@ -962,8 +962,8 @@ def read_input_file():
 
 
 def main():
-    # json_input = read_input()  # 插件运行时从 stdin 读
-    json_input = read_input_file()  # 调试时从文件读
+    json_input = read_input()  # 插件运行时从 stdin 读
+    # json_input = read_input_file()  # 调试时从文件读
     print(json_input)
     log.info(f"Plugin input: {json_input}")
     server_conn = json_input.get("server_connection") or {}
@@ -983,8 +983,8 @@ def main():
     # 把 server_connection 也塞到 settings 里，方便下载图片等功能使用 cookie
     settings["server_connection"] = server_conn
 
-    with open('settings.json', 'w', encoding='utf-8') as f:
-        json.dump(settings, f, indent=2, ensure_ascii=False)
+    # with open('settings.json', 'w', encoding='utf-8') as f:
+    #     json.dump(settings, f, indent=2, ensure_ascii=False)
 
     try:
         msg = handle_hook_or_task(stash, args, settings)
