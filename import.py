@@ -192,17 +192,13 @@ class App:
         if not self.actor_info:
             return
 
+        # 模拟 Emby Web：POST /emby/Items/{Id}
         url = f'{self.emby_server}/emby/Items/{self.actor_id}?api_key={self.api_key}'
-
-        try:
-            r = requests.get(url)
-            r.raise_for_status()
-        except Exception as e:
-            print('获取演员信息失败：', self.actor_name, e)
-            self.fail_list.append('获取演员信息失败 ' + self.actor_name)
-            return
-
-        data = r.json()
+        data = {
+            'Id': self.actor_id,
+            'Name': self.actor_name,
+            'Type': 'Person',
+        }
 
         # 把各字段整理成一段 Overview 文本，方便在 Emby 中查看
         lines = []
@@ -223,9 +219,6 @@ class App:
 
         if lines:
             overview = '\n'.join(lines)
-            existing_overview = data.get('Overview') or ''
-            if existing_overview and existing_overview.strip() != overview.strip():
-                overview = existing_overview + '\n\n' + overview
             data['Overview'] = overview
 
         # 可选：把生日的年份写入 ProductionYear，便于按年份筛选
@@ -237,11 +230,12 @@ class App:
             if year:
                 data['ProductionYear'] = year
 
-        r2 = requests.post(url, json=data)
-        if r2.status_code in (200, 204):
+        try:
+            r2 = requests.post(url, json=data)
+            r2.raise_for_status()
             print('元数据更新成功')
-        else:
-            print('元数据更新失败，状态码：', r2.status_code)
+        except Exception as e:
+            print('元数据更新失败：', self.actor_name, e)
             self.fail_list.append('更新元数据失败 ' + self.actor_name)
 
 
