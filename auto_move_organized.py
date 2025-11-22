@@ -652,13 +652,15 @@ def write_nfo_for_scene(video_path: str, scene: Dict[str, Any], settings: Dict[s
         log.error(f"[translator] 调用翻译失败: {e}")
 
     # 根据配置决定最终写入 NFO 的标题/简介
-    final_title = title
+    title_parts = [studio, date, title]
+    final_title = '.'.join(p for p in title_parts if p)
     final_plot = plot
     original_title_for_nfo = title
     original_plot_for_nfo = plot
 
     if translated_title:
-        final_title = translated_title
+        title_parts.append(translated_title)
+        final_title = '.'.join(p for p in title_parts if p)
 
     if translated_plot:
         final_plot = translated_plot
@@ -832,6 +834,7 @@ def download_scene_art(video_path: str, scene: Dict[str, Any], settings: Dict[st
 def download_actor_images(scene: Dict[str, Any], settings: Dict[str, Any]) -> None:
     """
     把演员图片下载到 {target_root}/actors/ 目录下，文件名为演员名（清洗过）。
+    同时为每个演员创建 NFO 文件
     """
     if not settings.get("download_actor_images", True):
         return
@@ -854,23 +857,108 @@ def download_actor_images(scene: Dict[str, Any], settings: Dict[str, Any]) -> No
             continue
         name = p.get("name")
         image_url = p.get("image_path")
-        if not name or not image_url:
+        if not name:
             continue
 
-        filename = f"{safe_segment(name)}.jpg"
-        dst_path = os.path.join(actors_root, filename)
-        abs_url = build_absolute_url(image_url, settings)
+        safe_name = safe_segment(name)
+        # 改为创建演员子目录
+        actor_dir = os.path.join(actors_root, safe_name)
 
-        if settings.get("dry_run"):
-            log.info(f"[dry_run] Would download actor image: '{abs_url}' -> '{dst_path}'")
-            continue
+        if not settings.get("dry_run"):
+            os.makedirs(actor_dir, exist_ok=True)
 
-        if os.path.exists(dst_path):
-            log.info(f"Actor image already exists, skip: {dst_path}")
-            continue
+        # 图片保存到演员目录下
+        dst_path = os.path.join(actor_dir, "folder.jpg")
 
-        _download_binary(abs_url, dst_path, settings)
+        if image_url:
+            abs_url = build_absolute_url(image_url, settings)
 
+            if settings.get("dry_run"):
+                log.info(f"[dry_run] Would download actor image: '{abs_url}' -> '{dst_path}'")
+            elif not os.path.exists(dst_path):
+                _download_binary(abs_url, dst_path, settings)
+            else:
+                log.info(f"Actor image already exists, skip: {dst_path}")
+
+        # 创建演员 NFO
+        write_actor_nfo(p, actors_root, settings)
+
+def write_actor_nfo(actor: Dict[str, Any], actors_root: str, settings: Dict[str, Any]) -> None:
+    """
+    为演员创建 person.nfo 文件
+    目录结构：{actors_root}/{演员名}/person.nfo
+    """
+    name = actor.get("name")
+    if not name:
+        return
+
+    safe_name = safe_segment(name)
+    actor_dir = os.path.join(actors_root, safe_name)
+    nfo_path = os.path.join(actor_dir, "person.nfo")
+
+    if settings.get("dry_run"):
+        log.info(f"[dry_run] Would write actor NFO: {nfo_path}")
+        return
+
+    os.makedirs(actor_dir, exist_ok=True)
+
+    # 构建 XML
+    root = ET.Element("person")
+
+    def _set_text(tag: str, value) -> None:
+        if value is None:
+            return
+        value = str(value).strip()
+        if not value:
+            return
+        el = ET.SubElement(root, tag)
+        el.text = value
+
+    # 基础信息
+    _set_text("name", name)
+    _set_text("sorttitle", name)
+
+    # 简介（使用 disambiguation）
+    disambiguation = actor.get("disambiguation")
+    if disambiguation:
+        _set_text("biography", disambiguation)
+
+    # 生日
+    _set_text("birthdate", actor.get("birthdate"))
+
+    # 出生地（用国家代替）
+    _set_text("placeofbirth", actor.get("country"))
+
+    # 性别
+    gender = actor.get("gender")
+    if gender:
+        gender_map = {
+            "MALE": "Male",
+            "FEMALE": "Female",
+            "TRANSGENDER_MALE": "Male",
+            "TRANSGENDER_FEMALE": "Female",
+        }
+        _set_text("gender", gender_map.get(gender, gender))
+
+    # 其他详细信息（Emby 可能不直接显示，但保留在 NFO 中）
+    _set_text("eyecolor", actor.get("eye_color"))
+
+    height_cm = actor.get("height_cm")
+    if height_cm:
+        _set_text("height", f"{height_cm} cm")
+
+    _set_text("measurements", actor.get("measurements"))
+
+    # 缩略图引用
+    _set_text("thumb", "folder.jpg")
+
+    # 写入文件
+    tree = ET.ElementTree(root)
+    try:
+        tree.write(nfo_path, encoding="utf-8", xml_declaration=True)
+        log.info(f"Wrote actor NFO: {nfo_path}")
+    except Exception as e:
+        log.error(f"写入演员 NFO 失败 '{nfo_path}': {e}")
 
 def post_process_moved_file(dst_video_path: str, scene: Dict[str, Any], settings: Dict[str, Any]) -> None:
     """
