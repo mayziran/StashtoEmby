@@ -6,8 +6,10 @@ import os
 import re
 import shutil
 import sys
+import time
 import xml.etree.ElementTree as ET
 from typing import Any, Dict, List
+from urllib.parse import urlparse
 
 import requests
 import stashapi.log as log
@@ -82,6 +84,12 @@ def load_settings(stash: StashInterface) -> Dict[str, Any]:
             "move_only_organized": True,
             "dry_run": False,
         }
+    # 调试用：保存一份完整配置到本地，结构与 stash_configuration.json 相同
+    # try:
+    #     with open("stash_configuration.json", "w", encoding="utf-8") as f:
+    #         json.dump(cfg, f, ensure_ascii=False, indent=5)
+    # except Exception:
+    #     pass
 
     plugins_settings = cfg.get("plugins", {}).get("auto_move_organized", {})
 
@@ -116,13 +124,19 @@ def load_settings(stash: StashInterface) -> Dict[str, Any]:
     # temperature 可能是字符串或数字，尝试转为 float，如果失败则保留原样
     translate_temperature = _get_val("translate_temperature", "")
     translate_prompt = _get_val("translate_prompt", "")
+
+    # 从全局配置中获取 Stash API Key（对应 stash_configuration.json.general.apiKey）
+    stash_api_key = ""
+    try:
+        stash_api_key = cfg.get("general", {}).get("apiKey") or ""
+    except Exception:
+        stash_api_key = ""
     # translate_temperature = None
     # try:
     #     if temp_raw is not None and str(temp_raw).strip() != "":
     #         translate_temperature = float(temp_raw)
     # except Exception:
     #     translate_temperature = str(temp_raw)
-
 
     log.info(
         f"Loaded settings: target_root='{target_root}', "
@@ -157,6 +171,8 @@ def load_settings(stash: StashInterface) -> Dict[str, Any]:
         "translate_title": translate_title,
         "translate_temperature": translate_temperature,
         "translate_prompt": translate_prompt,
+        # Stash 全局 API Key，用于下载图片时避免 Session 失效问题
+        "stash_api_key": stash_api_key,
     }
 
 
@@ -580,6 +596,7 @@ def _build_requests_session(settings: Dict[str, Any]) -> requests.Session:
     server_conn = settings.get("server_connection") or {}
     session = requests.Session()
 
+    # 1) 使用 SessionCookie（保持向后兼容）
     cookie = server_conn.get("SessionCookie") or {}
     name = cookie.get("Name") or cookie.get("name")
     value = cookie.get("Value") or cookie.get("value")
@@ -592,10 +609,15 @@ def _build_requests_session(settings: Dict[str, Any]) -> requests.Session:
             cookie_kwargs["domain"] = domain
         session.cookies.set(name, value, **cookie_kwargs)
 
+    # 2) 优先使用 Stash API Key，避免 Session 过期导致返回登录页 HTML
+    api_key = settings.get("stash_api_key") or ""
+    if api_key:
+        session.headers["ApiKey"] = api_key
+
     return session
 
 
-def _download_binary(url: str, dst_path: str, settings: Dict[str, Any]) -> bool:
+def _download_binary(url: str, dst_path: str, settings: Dict[str, Any], detect_ext: bool = False) -> bool:
     """
     从 Stash（或其它 HTTP 源）下载二进制文件到指定路径。
     """
@@ -605,19 +627,64 @@ def _download_binary(url: str, dst_path: str, settings: Dict[str, Any]) -> bool:
     url = build_absolute_url(url, settings)
     session = _build_requests_session(settings)
 
-    try:
-        resp = session.get(url, timeout=30, stream=True)
-        resp.raise_for_status()
-        os.makedirs(os.path.dirname(dst_path), exist_ok=True)
-        with open(dst_path, "wb") as f:
-            for chunk in resp.iter_content(chunk_size=8192):
-                if chunk:
-                    f.write(chunk)
-        log.info(f"Downloaded '{url}' -> '{dst_path}'")
-        return True
-    except Exception as e:
-        log.error(f"下载失败 '{url}' -> '{dst_path}': {e}")
-        return False
+    # 最多重试 3 次，简单指数退避
+    max_attempts = 3
+    last_error: Exception | None = None
+
+    for attempt in range(1, max_attempts + 1):
+        try:
+            resp = session.get(url, timeout=30, stream=True)
+            resp.raise_for_status()
+
+            # 根据响应头 / URL 推断实际图片类型，动态决定扩展名
+            final_path = dst_path
+            dst_dir, dst_filename = os.path.split(dst_path)
+            name_no_ext, old_ext = os.path.splitext(dst_filename)
+
+            if detect_ext:
+                content_type = (resp.headers.get("Content-Type") or "").lower()
+                guessed_ext = ""
+
+                if "image/" in content_type:
+                    if "jpeg" in content_type or "jpg" in content_type:
+                        guessed_ext = ".jpg"
+                    elif "png" in content_type:
+                        guessed_ext = ".png"
+                    elif "webp" in content_type:
+                        guessed_ext = ".webp"
+                    elif "gif" in content_type:
+                        guessed_ext = ".gif"
+
+                if not guessed_ext:
+                    try:
+                        parsed = urlparse(resp.url or url)
+                        _, ext_from_url = os.path.splitext(parsed.path)
+                        guessed_ext = ext_from_url
+                    except Exception:
+                        guessed_ext = ""
+
+                # 如果无法推断，就退回到原始扩展名（可能为空）
+                final_ext = guessed_ext or old_ext or ""
+                final_filename = name_no_ext + final_ext
+                final_path = os.path.join(dst_dir, final_filename)
+
+            os.makedirs(os.path.dirname(final_path), exist_ok=True)
+            with open(final_path, "wb") as f:
+                for chunk in resp.iter_content(chunk_size=8192):
+                    if chunk:
+                        f.write(chunk)
+
+            log.info(f"Downloaded '{url}' -> '{final_path}'")
+            return True
+        except Exception as e:
+            last_error = e
+            log.error(f"下载失败(第{attempt}次) '{url}' -> '{dst_path}': {e}")
+            if attempt < max_attempts:
+                # 简单退避：2s, 4s
+                time.sleep(2 * attempt)
+
+    log.error(f"下载失败，已重试 {max_attempts} 次仍失败 '{url}' -> '{dst_path}': {last_error}")
+    return False
 
 
 def write_nfo_for_scene(video_path: str, scene: Dict[str, Any], settings: Dict[str, Any]) -> None:
@@ -845,19 +912,23 @@ def download_scene_art(video_path: str, scene: Dict[str, Any], settings: Dict[st
 
     video_dir = os.path.dirname(video_path)
     base_name = os.path.splitext(os.path.basename(video_path))[0]
-    dst_poster = os.path.join(video_dir, f"{base_name}-poster.jpg")
+    # 先不带扩展名，真实扩展名在下载时根据 Content-Type/URL 决定
+    poster_base = os.path.join(video_dir, f"{base_name}-poster")
 
     abs_url = build_absolute_url(poster_url, settings)
 
     if settings.get("dry_run"):
-        log.info(f"[dry_run] Would download poster: '{abs_url}' -> '{dst_poster}'")
+        log.info(f"[dry_run] Would download poster: '{abs_url}' -> '{poster_base}.[ext]'")
         return
 
-    if os.path.exists(dst_poster):
-        log.info(f"Poster already exists, skip: {dst_poster}")
-        return
+    # 如果已经有任意常见图片扩展名的封面，则跳过
+    for ext in (".jpg", ".jpeg", ".png", ".webp", ".gif"):
+        candidate = poster_base + ext
+        if os.path.exists(candidate):
+            log.info(f"Poster already exists, skip: {candidate}")
+            return
 
-    _download_binary(abs_url, dst_poster, settings)
+    _download_binary(abs_url, poster_base, settings, detect_ext=True)
 
 
 def write_actor_nfo(actor_dir: str, performer: Dict[str, Any], settings: Dict[str, Any]) -> None:
@@ -965,7 +1036,7 @@ def download_actor_images(scene: Dict[str, Any], settings: Dict[str, Any]) -> No
         if not dry_run:
             os.makedirs(actor_dir, exist_ok=True)
 
-        # 1) 下载演员图片 -> folder.jpg
+        # 1) 下载演员图片 -> folder.jpg（保持 jpg 扩展名，避免影响 Emby/导入脚本的兼容性）
         image_url = p.get("image_path")
         if settings.get("download_actor_images", True) and image_url:
             dst_path = os.path.join(actor_dir, "folder.jpg")
@@ -977,7 +1048,7 @@ def download_actor_images(scene: Dict[str, Any], settings: Dict[str, Any]) -> No
                 if os.path.exists(dst_path):
                     log.info(f"Actor image already exists, skip: {dst_path}")
                 else:
-                    _download_binary(abs_url, dst_path, settings)
+                    _download_binary(abs_url, dst_path, settings, detect_ext=False)
 
         # 2) 生成演员 NFO
         write_actor_nfo(actor_dir, p, settings)
