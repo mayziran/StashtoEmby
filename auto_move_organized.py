@@ -1214,11 +1214,11 @@ def handle_hook_or_task(stash: StashInterface, args: Dict[str, Any], settings: D
 
     # 1) Hook 模式：只处理单个 scene（通常从 Scene.Update.Post 触发）
     if scene_id is not None:
-        try:
-            with open(f"hook_ctx-{scene_id}.json", "w", encoding="utf-8") as f:
-                json.dump(hook_ctx, f, indent=2, ensure_ascii=False)
-        except Exception:
-            pass
+        # try:
+        #     with open(f"hook_ctx-{scene_id}.json", "w", encoding="utf-8") as f:
+        #         json.dump(hook_ctx, f, indent=2, ensure_ascii=False)
+        # except Exception:
+        #     pass
         return f"Processed scene {scene_id}, Hook 场景保存日志直接返回"
 
         scene_id = int(scene_id)
@@ -1286,7 +1286,7 @@ def handle_hook_or_task(stash: StashInterface, args: Dict[str, Any], settings: D
 
         moved = process_scene(scene, settings)
         total_moved += moved
-        break  # 单个完成后打断, 方便调试
+        # break  # 单个完成后打断, 方便调试
 
     msg = (
         f"Scanned {total_scenes} scenes, "
