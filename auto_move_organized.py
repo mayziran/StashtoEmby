@@ -642,6 +642,8 @@ def _download_binary(url: str, dst_path: str, settings: Dict[str, Any], detect_e
             # 默认直接使用调用方给的目标路径
             final_path = dst_path
             dst_dir, dst_filename = os.path.split(dst_path)
+            log.info(f"Downloading '{url}' to '{final_path}'")
+            log.info(f"Downloading {dst_dir} and filename {dst_filename}")
 
             if detect_ext:
                 content_type = (resp.headers.get("Content-Type") or "").lower()
@@ -667,13 +669,20 @@ def _download_binary(url: str, dst_path: str, settings: Dict[str, Any], detect_e
 
                 # 只调整扩展名，不动文件名主体（包含演员名等）
                 name_no_ext, old_ext = os.path.splitext(dst_filename)
+                log.info(
+                    f"Downloading name_no_ext {name_no_ext}, Old extension: '{old_ext}'"
+                )
 
                 if guessed_ext:
                     # 若有明确推断出的扩展名，则使用它
                     if old_ext.lower() == guessed_ext.lower():
                         final_filename = dst_filename
                     else:
+
                         final_filename = name_no_ext + guessed_ext
+                        log.info(
+                            f"final_filename = name_no_ext + guessed_ext : {final_filename}, {name_no_ext}, {guessed_ext}"
+                        )
                 elif old_ext:
                     # 没有推断出，但原路径自带扩展名，保持原样
                     final_filename = dst_filename
@@ -682,6 +691,9 @@ def _download_binary(url: str, dst_path: str, settings: Dict[str, Any], detect_e
                     final_filename = dst_filename
 
                 final_path = os.path.join(dst_dir, final_filename)
+                log.info(
+                    f"Downloading file extension '{guessed_ext}', final path: '{final_path}'"
+                )
 
             os.makedirs(os.path.dirname(final_path), exist_ok=True)
             with open(final_path, "wb") as f:
