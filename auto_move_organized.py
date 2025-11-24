@@ -1253,7 +1253,7 @@ def handle_hook_or_task(stash: StashInterface, args: Dict[str, Any], settings: D
 
         moved = process_scene(scene, settings)
         total_moved += moved
-        # break  # 单个完成后打断, 方便调试
+        break  # 单个完成后打断, 方便调试
 
     msg = (
         f"Scanned {total_scenes} scenes, "
