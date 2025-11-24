@@ -922,6 +922,10 @@ def download_scene_art(video_path: str, scene: Dict[str, Any], settings: Dict[st
 
     video_dir = os.path.dirname(video_path)
     base_name = os.path.splitext(os.path.basename(video_path))[0]
+    log.info(f"Video path: {video_path}")
+    log.info(f"Video directory: {video_dir}, base name: {base_name}")
+    log.info(f"Poster URL: {poster_url}")
+    log.info(f"pic base name: {base_name}")
     # 先不带扩展名，真实扩展名在下载时根据 Content-Type/URL 决定
     poster_base = os.path.join(video_dir, f"{base_name}-poster")
     poster_stem = os.path.basename(poster_base)
@@ -961,9 +965,10 @@ def download_scene_art(video_path: str, scene: Dict[str, Any], settings: Dict[st
     #         return
     #     except Exception as e:
     #         log.error(f"重命名 poster 文件失败 '{old_path}' -> '{new_path}': {e}")
-            # 如果重命名失败，则继续尝试重新下载
+    # 如果重命名失败，则继续尝试重新下载
 
     abs_url = build_absolute_url(poster_url, settings)
+    log.info(f"Downloading poster from URL: {abs_url}")
 
     if settings.get("dry_run"):
         log.info(f"[dry_run] Would download poster: '{abs_url}' -> '{poster_base}.[ext]'")
