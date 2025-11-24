@@ -19,6 +19,9 @@ from stashapi.stashapp import StashInterface
 # 必须和 YAML 里的 id 对应
 PLUGIN_ID = "auto-move-organized"
 
+# 常见字幕扩展名
+SUBTITLE_EXTS = {".srt", ".ass", ".ssa", ".vtt", ".sub", ".sup"}
+
 
 def task_log(message: str, progress: float | None = None) -> None:
     """
@@ -401,7 +404,7 @@ def move_file(scene: Dict[str, Any], file_obj: Dict[str, Any], settings: Dict[st
             # 使用 move 确保跨设备也能工作（Python 会自动选择 copy+remove）
             shutil.move(src, dst)
         try:
-            post_process_moved_file(dst, scene, settings)
+            post_process_moved_file(src, dst, scene, settings)
         except Exception as post_e:
             log.error(f"移动后处理失败 '{dst}': {post_e}")
         log.info(f"Moved file: '{src}' -> '{dst}' (dry_run={settings.get('dry_run')})")
@@ -665,7 +668,13 @@ def _download_binary(url: str, dst_path: str, settings: Dict[str, Any], detect_e
 
                 # 如果无法推断，就退回到原始扩展名（可能为空）
                 final_ext = guessed_ext or old_ext or ""
-                final_filename = name_no_ext + final_ext
+
+                # 保证影片封面文件名以 "-poster" 结尾（便于 Emby 识别）
+                final_name = name_no_ext
+                if not final_name.endswith("-poster"):
+                    final_name = final_name + "-poster"
+
+                final_filename = final_name + final_ext
                 final_path = os.path.join(dst_dir, final_filename)
 
             os.makedirs(os.path.dirname(final_path), exist_ok=True)
@@ -1054,13 +1063,103 @@ def download_actor_images(scene: Dict[str, Any], settings: Dict[str, Any]) -> No
         write_actor_nfo(actor_dir, p, settings)
 
 
-def post_process_moved_file(dst_video_path: str, scene: Dict[str, Any], settings: Dict[str, Any]) -> None:
+def move_related_subtitle_files(
+    src_video_path: str,
+    dst_video_path: str,
+    settings: Dict[str, Any],
+) -> None:
+    """
+    如果源目录下存在与视频同名的字幕文件，一并移动到目标目录，
+    并按新视频文件名重命名，方便 Emby 识别。
+
+    例如：
+      源视频: /path/OldName.mkv
+      源字幕: /path/OldName.srt, /path/OldName.chs.srt
+      目标视频: /new/Studio.2025-01-01.NewName.mkv
+
+      则字幕会移动为：
+        /new/Studio.2025-01-01.NewName.srt
+        /new/Studio.2025-01-01.NewName.chs.srt
+    """
+    src_dir = os.path.dirname(src_video_path)
+    dst_dir = os.path.dirname(dst_video_path)
+
+    if not src_dir or not os.path.isdir(src_dir):
+        return
+
+    src_base = os.path.basename(src_video_path)
+    dst_base = os.path.basename(dst_video_path)
+    src_stem, _ = os.path.splitext(src_base)
+    dst_stem, _ = os.path.splitext(dst_base)
+
+    # 源文件名为空，直接返回
+    if not src_stem or not dst_stem:
+        return
+
+    dry_run = bool(settings.get("dry_run"))
+    moved_count = 0
+
+    try:
+        for name in os.listdir(src_dir):
+            full_src = os.path.join(src_dir, name)
+            if not os.path.isfile(full_src):
+                continue
+
+            _, ext = os.path.splitext(name)
+            if ext.lower() not in SUBTITLE_EXTS:
+                continue
+
+            # 只处理与原视频同名（含语言后缀）的字幕
+            # 允许类似 OldName.srt / OldName.chs.srt / OldName.en.srt
+            if not name.startswith(src_stem):
+                continue
+
+            suffix = name[len(src_stem) :]
+            new_name = dst_stem + suffix
+            full_dst = os.path.join(dst_dir, new_name)
+
+            if full_src == full_dst:
+                continue
+
+            # 目标已存在则跳过，避免覆盖
+            if os.path.exists(full_dst):
+                log.info(f"目标字幕已存在，跳过: '{full_dst}'")
+                continue
+
+            if dry_run:
+                log.info(f"[dry_run] Would move subtitle: '{full_src}' -> '{full_dst}'")
+            else:
+                os.makedirs(dst_dir, exist_ok=True)
+                shutil.move(full_src, full_dst)
+                log.info(f"Moved subtitle: '{full_src}' -> '{full_dst}'")
+
+            moved_count += 1
+
+        if moved_count > 0:
+            log.info(
+                f"共移动 {moved_count} 个字幕文件，"
+                f"源目录='{src_dir}', 目标目录='{dst_dir}'"
+            )
+    except Exception as e:
+        log.error(f"移动字幕文件时出错: {e}")
+
+
+def post_process_moved_file(
+    src_video_path: str,
+    dst_video_path: str,
+    scene: Dict[str, Any],
+    settings: Dict[str, Any],
+) -> None:
     """
     文件移动之后的后续处理：
-    1. 写 NFO
-    2. 下载场景封面图到视频目录（folder.jpg）
-    3. 下载演员头像并生成演员 NFO 到 {target_root}/actors/
+    1. 移动并重命名同名字幕文件
+    2. 写 NFO
+    3. 下载场景封面图到视频目录（folder.jpg）
+    4. 下载演员头像并生成演员 NFO 到 {target_root}/actors/
     """
+    move_related_subtitle_files(src_video_path, dst_video_path, settings)
+
+    # 后续处理都基于新视频路径
     write_nfo_for_scene(dst_video_path, scene, settings)
     download_scene_art(dst_video_path, scene, settings)
     download_actor_images(scene, settings)
