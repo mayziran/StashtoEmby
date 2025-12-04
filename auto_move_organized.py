@@ -1013,6 +1013,10 @@ def overlay_studio_logo_on_poster(poster_base: str, scene: Dict[str, Any], setti
             poster_path = candidate
             break
 
+    # 兼容没有扩展名的 poster 文件
+    if not poster_path and os.path.exists(poster_base):
+        poster_path = poster_base
+
     if not poster_path:
         log.warning(f"Poster file not found for overlay, base='{poster_base}'")
         return
@@ -1030,6 +1034,10 @@ def overlay_studio_logo_on_poster(poster_base: str, scene: Dict[str, Any], setti
             logo_path = candidate
             break
 
+    # 兼容没有扩展名的 logo 文件
+    if not logo_path and os.path.exists(logo_base):
+        logo_path = logo_base
+
     if not logo_path:
         abs_logo_url = build_absolute_url(studio_image_url, settings)
         log.info(f"Downloading studio logo from URL: {abs_logo_url}")
@@ -1044,6 +1052,9 @@ def overlay_studio_logo_on_poster(poster_base: str, scene: Dict[str, Any], setti
             if os.path.exists(candidate):
                 logo_path = candidate
                 break
+
+        if not logo_path and os.path.exists(logo_base):
+            logo_path = logo_base
 
     if not logo_path:
         log.warning(f"Studio logo file not found for overlay, base='{logo_base}'")
@@ -1424,7 +1435,7 @@ def handle_hook_or_task(stash: StashInterface, args: Dict[str, Any], settings: D
 
         moved = process_scene(scene, settings)
         total_moved += moved
-        # break  # 单个完成后打断, 方便调试
+        break  # 单个完成后打断, 方便调试
 
     msg = (
         f"Scanned {total_scenes} scenes, "
