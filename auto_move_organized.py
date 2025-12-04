@@ -658,6 +658,8 @@ def _download_binary(url: str, dst_path: str, settings: Dict[str, Any], detect_e
                         guessed_ext = ".webp"
                     elif "gif" in content_type:
                         guessed_ext = ".gif"
+                    elif "svg" in content_type:
+                        guessed_ext = ".svg"
 
                 if not guessed_ext:
                     try:
@@ -1005,7 +1007,7 @@ def overlay_studio_logo_on_poster(poster_base: str, scene: Dict[str, Any], setti
         return
 
     # 找到实际的 poster 文件（带扩展名）
-    exts = (".jpg", ".jpeg", ".png", ".webp", ".gif")
+    exts = (".jpg", ".jpeg", ".png", ".webp", ".gif", ".svg")
     poster_path = None
     for ext in exts:
         candidate = poster_base + ext
@@ -1059,6 +1061,32 @@ def overlay_studio_logo_on_poster(poster_base: str, scene: Dict[str, Any], setti
     if not logo_path:
         log.warning(f"Studio logo file not found for overlay, base='{logo_base}'")
         return
+
+    # 如果是 SVG 格式的 logo，则尝试先转换为 PNG，以便 Pillow 处理
+    def _is_svg_file(path: str) -> bool:
+        try:
+            with open(path, "rb") as f:
+                header = f.read(512).lower()
+            return b"<svg" in header
+        except Exception:
+            return False
+
+    logo_ext = os.path.splitext(logo_path)[1].lower()
+    if logo_ext == ".svg" or _is_svg_file(logo_path):
+        try:
+            import cairosvg  # type: ignore[import]
+        except Exception:
+            log.error("检测到 SVG 格式厂商 logo，但未安装 cairosvg，无法转换为位图，跳过叠加")
+            return
+
+        png_logo_path = os.path.splitext(logo_path)[0] + ".png"
+        try:
+            cairosvg.svg2png(url=logo_path, write_to=png_logo_path)
+            logo_path = png_logo_path
+            log.info(f"Converted SVG studio logo to PNG for overlay: {png_logo_path}")
+        except Exception as e:
+            log.error(f"将 SVG logo 转换为 PNG 失败，跳过叠加: {e}")
+            return
 
     try:
         from PIL import Image  # type: ignore[import]
