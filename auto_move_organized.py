@@ -1008,6 +1008,11 @@ def overlay_studio_logo_on_poster(poster_base: str, scene: Dict[str, Any], setti
         log.info("Scene has no studio logo image, skip overlay")
         return
 
+    # Stash 对没有自定义 logo 的厂商会返回带 default=true 的占位图，直接跳过
+    if "default=true" in str(studio_image_url):
+        log.info("Studio logo is default placeholder image, skip overlay")
+        return
+
     # 找到实际的 poster 文件（带扩展名）
     exts = (".jpg", ".jpeg", ".png", ".webp", ".gif", ".svg")
     poster_path = None
@@ -1161,6 +1166,25 @@ def overlay_studio_logo_on_poster(poster_base: str, scene: Dict[str, Any], setti
         log.info(f"Overlayed studio logo on poster: {poster_path}")
     except Exception as e:
         log.error(f"保存叠加 logo 后的 poster 失败: {e}")
+        return
+
+    # 处理完成后，删除本地缓存的厂商 logo 原图，避免在目录中留下多余文件
+    try:
+        # 当前使用的 logo 文件
+        if os.path.exists(logo_path):
+            os.remove(logo_path)
+
+        # 如果存在同一前缀的其他格式（例如 SVG 原图 + 转换后的 PNG），一并清理
+        cleanup_exts = (".jpg", ".jpeg", ".png", ".webp", ".gif", ".svg")
+        for ext in cleanup_exts:
+            candidate = logo_base + ext
+            if os.path.exists(candidate):
+                try:
+                    os.remove(candidate)
+                except Exception as e_remove:
+                    log.error(f"删除厂商 logo 缓存文件失败 '{candidate}': {e_remove}")
+    except Exception as e:
+        log.error(f"清理厂商 logo 缓存文件时出错: {e}")
 
 
 def write_actor_nfo(actor_dir: str, performer: Dict[str, Any], settings: Dict[str, Any]) -> None:
