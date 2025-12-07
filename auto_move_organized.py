@@ -1503,7 +1503,7 @@ def handle_hook_or_task(stash: StashInterface, args: Dict[str, Any], settings: D
         # with open(f'scene-{sid}.json', 'w', encoding='utf-8') as f:
         #     json.dump(scene, f, indent=2, ensure_ascii=False)
 
-        if not scene.get("organized"):
+        if not scene.get("organized") and settings.get("move_only_organized"):
             # 仍然更新一下进度条
             progress = index / total_scenes
             task_log(f"Skipping unorganized scene {sid} ({index}/{total_scenes})", progress=progress)
