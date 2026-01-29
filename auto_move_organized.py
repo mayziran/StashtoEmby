@@ -218,7 +218,11 @@ def build_absolute_url(url: str, settings: Dict[str, Any]) -> str:
     return base + url
 
 
-def build_template_vars(scene: Dict[str, Any], file_path: str) -> Dict[str, Any]:
+def build_template_vars(
+        scene: Dict[str, Any],
+        file_path: str,
+        file_obj: Dict[str, Any] | None = None,
+) -> Dict[str, Any]:
     """
     根据 scene 信息和文件路径构建一份变量字典，
     既用于路径模板，也可用于 NFO 等其它场景。
@@ -286,6 +290,39 @@ def build_template_vars(scene: Dict[str, Any], file_path: str) -> Dict[str, Any]
         if isinstance(s0, dict):
             external_id = s0.get("stash_id") or ""
 
+    width = None
+    height = None
+    if isinstance(file_obj, dict):
+        width = file_obj.get("width")
+        height = file_obj.get("height")
+
+    resolution = ""
+    quality = ""
+    try:
+        w = int(width) if width is not None else None
+        h = int(height) if height is not None else None
+        if w and h and w > 0 and h > 0:
+            min_dim = min(w, h)
+            if min_dim >= 4320:
+                resolution, quality = "8K", "FUHD"
+            elif min_dim >= 2160:
+                resolution, quality = "4K", "UHD"
+            elif min_dim >= 1440:
+                resolution, quality = "1440p", "QHD"
+            elif min_dim >= 1080:
+                resolution, quality = "1080p", "FHD"
+            elif min_dim >= 720:
+                resolution, quality = "720p", "HD"
+            elif min_dim >= 480:
+                resolution, quality = "480p", "SD"
+            else:
+                resolution, quality = "480p", "LOW"
+
+            if resolution == "1080p" and w >= 2000 and w < 2560:
+                quality = "2K"
+    except Exception:
+        resolution, quality = "", ""
+
     return {
         "id": scene_id,
         "scene_title": scene_title,
@@ -310,12 +347,17 @@ def build_template_vars(scene: Dict[str, Any], file_path: str) -> Dict[str, Any]
         "original_name": original_name,
         "ext": ext,
         "external_id": external_id,
+        "width": width,
+        "height": height,
+        "resolution": resolution,
+        "quality": quality,
     }
 
 
 def build_target_path(
         scene: Dict[str, Any],
         file_path: str,
+        file_obj: Dict[str, Any],
         settings: Dict[str, Any],
 ) -> str:
     """
@@ -338,6 +380,8 @@ def build_target_path(
       {tag_names} / {tags}
       {group_name}
       {rating} / {rating100}
+      {resolution}
+      {quality}
       {original_basename}
       {original_name}
       {ext}
@@ -349,13 +393,19 @@ def build_target_path(
     if not target_root:
         raise RuntimeError("目标目录(target_root)未配置")
 
-    vars_map = build_template_vars(scene, file_path)
+    vars_map = build_template_vars(scene, file_path, file_obj)
     original_basename = vars_map["original_basename"]
     ext = vars_map["ext"]
 
+    # 避免变量中出现路径分隔符导致被当成子目录
+    vars_map_for_path = dict(vars_map)
+    for k, v in vars_map_for_path.items():
+        if isinstance(v, str):
+            vars_map_for_path[k] = v.replace("\\", "_").replace("/", "_")
+
     # 先做模板替换
     try:
-        rel_path = template.format(**vars_map)
+        rel_path = template.format(**vars_map_for_path)
     except Exception as e:
         raise RuntimeError(f"命名模板解析失败: {e}")
 
@@ -383,7 +433,7 @@ def move_file(scene: Dict[str, Any], file_obj: Dict[str, Any], settings: Dict[st
         return False
 
     try:
-        dst = build_target_path(scene, src, settings)
+        dst = build_target_path(scene, src, file_obj, settings)
     except Exception as e:
         log.error(f"构建目标路径失败: {e}")
         return False

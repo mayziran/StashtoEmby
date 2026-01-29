@@ -14,7 +14,7 @@ settings:
     displayName: 目标根目录（移动到此目录下）
     type: STRING
   filename_template:
-    displayName: 命名模板（相对 target_root 的路径+文件名）\n可用占位符示例（不完全列表，实际以 build_template_vars 返回为准）：\n      {id}                -> scene id\n      {scene_title}       -> 场景标题\n      {scene_date}        -> 场景日期（原始字符串，例如 2025-01-02）\n      {date_year}         -> 场景年份\n      {date_month}        -> 场景月份（两位）\n      {date_day}          -> 场景日期（两位）\n      {studio} / {studio_name}\n      {studio_id}\n      {code}\n      {director}\n      {performers}\n      {first_performer}\n      {performer_count}\n      {tag_names} / {tags}\n      {group_name}\n      {rating} / {rating100}\n      {original_basename}\n      {original_name}\n      {ext}
+    displayName: 命名模板（相对 target_root 的路径+文件名）\n可用占位符示例（不完全列表，实际以 build_template_vars 返回为准）：\n      {id}                -> scene id\n      {scene_title}       -> 场景标题\n      {scene_date}        -> 场景日期（原始字符串，例如 2025-01-02）\n      {date_year}         -> 场景年份\n      {date_month}        -> 场景月份（两位）\n      {date_day}          -> 场景日期（两位）\n      {studio} / {studio_name}\n      {studio_id}\n      {code}\n      {director}\n      {performers}\n      {first_performer}\n      {performer_count}\n      {tag_names} / {tags}\n      {group_name}\n      {rating} / {rating100}\n      {resolution}\n      {quality}\n      {original_basename}\n      {original_name}\n      {ext}
     type: STRING
   move_only_organized:
     displayName: 只移动「已整理」文件
