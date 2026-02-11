@@ -1162,6 +1162,78 @@ def remove_old_metadata(file_path: str, settings: Dict[str, Any]) -> None:
         log.error(f"Error removing old metadata for {file_path}: {e}")
 
 
+def _clean_up_to_stop_directory(normalized_dir: str, normalized_source: str, first_subdir: str) -> None:
+    """
+    从指定目录向上清理空目录，直到停止目录
+    """
+    # 计算停止清理的目录
+    stop_dir = os.path.join(normalized_source, first_subdir)
+
+    # 从当前目录向上清理，但不超过停止目录
+    current = normalized_dir
+    while current != stop_dir and os.path.dirname(current) != current:
+        if os.path.isdir(current) and not os.listdir(current):
+            os.rmdir(current)
+            log.info(f"Removed empty directory: {current}")
+            current = os.path.dirname(current)
+        else:
+            break
+
+    # 检查停止目录本身是否需要清理
+    if os.path.isdir(stop_dir) and current == stop_dir and not os.listdir(stop_dir):
+        os.rmdir(stop_dir)
+        log.info(f"Removed empty stop directory: {stop_dir}")
+
+
+def _handle_mapped_directory_cleanup(directory: str, source_target_mapping: str) -> bool:
+    """
+    处理有映射时的目录清理逻辑
+    返回是否已处理
+    """
+    if source_target_mapping and '->' in source_target_mapping:
+        parts = source_target_mapping.split('->', 1)
+        if len(parts) == 2:
+            source_base_dir = parts[0].strip()
+            if source_base_dir:
+                normalized_source = os.path.normpath(source_base_dir)
+                normalized_dir = os.path.normpath(directory)
+
+                # 检查目录是否在源基础目录下
+                if normalized_dir.startswith(normalized_source + os.sep):
+                    # 获取相对于源目录的第一级子目录
+                    rel_path = os.path.relpath(normalized_dir, normalized_source)
+                    first_subdir = rel_path.split(os.sep)[0] if rel_path else ""
+
+                    # 如果是源基础目录本身，跳过清理
+                    if not first_subdir:
+                        return True
+
+                    _clean_up_to_stop_directory(normalized_dir, normalized_source, first_subdir)
+                    return True
+    return False
+
+
+def _handle_unmapped_directory_cleanup(directory: str, base_path: str, is_moving_from_target_dir: bool) -> None:
+    """
+    处理无映射时的目录清理逻辑
+    """
+    # 如果文件不是从目标目录内移动（即从外部移动到目标目录），则不清理
+    if not is_moving_from_target_dir:
+        log.debug(f"Skip cleaning for file moved from outside target directory: {directory}")
+        return
+
+    # 通用清理逻辑：从当前目录向上清理到 base_path
+    dir_path = os.path.normpath(directory)
+    current = dir_path
+    while current != base_path and os.path.dirname(current) != current:
+        if os.path.isdir(current) and not os.listdir(current):
+            os.rmdir(current)
+            log.info(f"Removed empty directory: {current}")
+            current = os.path.dirname(current)
+        else:
+            break
+
+
 def remove_empty_parent_dirs(directory: str, base_path: str, source_target_mapping: str = None, is_moving_from_target_dir: bool = False) -> None:
     """
     清理空的父目录
@@ -1171,65 +1243,13 @@ def remove_empty_parent_dirs(directory: str, base_path: str, source_target_mappi
         - 目标目录内重新组织：清理到目标根目录
     """
     try:
-        # 规范化路径
-        dir_path = os.path.normpath(directory)
-        base_path = os.path.normpath(base_path)
-        
         # 有映射的情况：只清理到源目录的下一级
-        if source_target_mapping and '->' in source_target_mapping:
-            parts = source_target_mapping.split('->', 1)
-            if len(parts) == 2:
-                source_base_dir = parts[0].strip()
-                if source_base_dir:
-                    normalized_source = os.path.normpath(source_base_dir)
-                    normalized_dir = os.path.normpath(directory)
-                    
-                    # 检查目录是否在源基础目录下
-                    if normalized_dir.startswith(normalized_source + os.sep):
-                        # 获取相对于源目录的第一级子目录
-                        rel_path = os.path.relpath(normalized_dir, normalized_source)
-                        first_subdir = rel_path.split(os.sep)[0] if rel_path else ""
-                        
-                        # 如果是源基础目录本身，跳过清理
-                        if not first_subdir:
-                            return
-                        
-                        # 计算停止清理的目录
-                        stop_dir = os.path.join(normalized_source, first_subdir)
-                        
-                        # 从当前目录向上清理，但不超过停止目录
-                        current = normalized_dir
-                        while current != stop_dir and os.path.dirname(current) != current:
-                            if os.path.isdir(current) and not os.listdir(current):
-                                os.rmdir(current)
-                                log.info(f"Removed empty directory: {current}")
-                                current = os.path.dirname(current)
-                            else:
-                                break
-                        
-                        # 检查停止目录本身是否需要清理
-                        if os.path.isdir(stop_dir) and current == stop_dir and not os.listdir(stop_dir):
-                            os.rmdir(stop_dir)
-                            log.info(f"Removed empty stop directory: {stop_dir}")
-                        return
+        if _handle_mapped_directory_cleanup(directory, source_target_mapping):
+            return
 
         # 无映射的情况：根据文件来源决定是否清理
-        if not source_target_mapping:
-            # 如果文件不是从目标目录内移动（即从外部移动到目标目录），则不清理
-            if not is_moving_from_target_dir:
-                log.debug(f"Skip cleaning for file moved from outside target directory: {directory}")
-                return
+        _handle_unmapped_directory_cleanup(directory, base_path, is_moving_from_target_dir)
 
-        # 通用清理逻辑：从当前目录向上清理到 base_path
-        current = dir_path
-        while current != base_path and os.path.dirname(current) != current:
-            if os.path.isdir(current) and not os.listdir(current):
-                os.rmdir(current)
-                log.info(f"Removed empty directory: {current}")
-                current = os.path.dirname(current)
-            else:
-                break
-                
     except Exception as e:
         log.error(f"Error removing empty parent directories: {e}")
 
