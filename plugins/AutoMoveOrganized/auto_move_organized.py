@@ -755,7 +755,7 @@ def move_file_with_suffix_handling(scene: Dict[str, Any], file_obj: Dict[str, An
             # 获取配置来确定基础路径（目标目录或映射的目标目录）
             source_target_mapping = settings.get("source_target_mapping", "").strip()
             base_path = ""
-            
+
             if source_target_mapping and '->' in source_target_mapping:
                 # 有映射：使用映射的目标目录
                 parts = source_target_mapping.split('->', 1)
@@ -764,9 +764,12 @@ def move_file_with_suffix_handling(scene: Dict[str, Any], file_obj: Dict[str, An
             else:
                 # 无映射：使用目标根目录
                 base_path = settings.get("target_root", "").strip()
-            
+
             if base_path:
-                remove_empty_parent_dirs(original_dir, base_path)
+                # 判断是否应该清理目录
+                is_moving_from_target_dir = should_clean_directory(original_dir, settings)
+                
+                remove_empty_parent_dirs(original_dir, base_path, source_target_mapping, is_moving_from_target_dir)
 
         log.info(f"Moved file: '{src}' -> '{final_dst}' (dry_run={settings.get('dry_run')})")
         return True
@@ -1064,6 +1067,28 @@ def is_file_in_target_location(file_path: str, scene: Dict[str, Any], file_obj: 
         return False
 
 
+def should_clean_directory(original_dir: str, settings: Dict[str, Any]) -> bool:
+    """
+    判断是否应该清理指定目录
+    - 有映射：由 remove_empty_parent_dirs 内部处理
+    - 无映射：只有当原始目录在目标目录内时才清理
+    """
+    source_target_mapping = settings.get("source_target_mapping", "").strip()
+    
+    # 有映射时，由清理函数内部处理逻辑
+    if source_target_mapping:
+        return True
+    
+    # 无映射时，只有当原始目录在目标根目录内时才清理
+    target_root = settings.get("target_root", "").strip()
+    if not target_root:
+        return False
+    
+    normalized_original_dir = os.path.normpath(original_dir)
+    normalized_target_root = os.path.normpath(target_root)
+    return normalized_original_dir.startswith(normalized_target_root + os.sep)
+
+
 def build_target_path_for_existing_file(file_path: str, scene: Dict[str, Any], file_obj: Dict[str, Any], settings: Dict[str, Any]) -> str:
     """
     为已存在于目标目录的文件构建目标路径，保留目标路径下的一级子目录
@@ -1214,34 +1239,74 @@ def remove_old_metadata(file_path: str, settings: Dict[str, Any]) -> None:
         log.error(f"Error removing old metadata for {file_path}: {e}")
 
 
-def remove_empty_parent_dirs(directory: str, base_path: str) -> None:
+def remove_empty_parent_dirs(directory: str, base_path: str, source_target_mapping: str = None, is_moving_from_target_dir: bool = False) -> None:
     """
-    递归删除空的父目录，但不超过base_path
+    清理空的父目录
+    - 有映射时：只清理源目录的下一级（如 /data/待整理/111），不清理到 /data/待整理
+    - 无映射时：
+        - 从外部移动到目标目录：不清理
+        - 目标目录内重新组织：清理到目标根目录
     """
     try:
         # 规范化路径
         dir_path = os.path.normpath(directory)
         base_path = os.path.normpath(base_path)
         
-        # 从当前目录向上遍历
-        while dir_path != base_path and os.path.dirname(dir_path) != dir_path:
-            if os.path.isdir(dir_path):
-                try:
-                    # 检查目录是否为空
-                    if not os.listdir(dir_path):
-                        os.rmdir(dir_path)
-                        log.info(f"Removed empty directory: {dir_path}")
-                        # 继续向上检查父目录
-                        dir_path = os.path.dirname(dir_path)
-                    else:
-                        # 如果目录不为空，停止向上删除
-                        break
-                except OSError as e:
-                    log.warning(f"Could not remove directory {dir_path}: {e}")
-                    break
+        # 有映射的情况：只清理到源目录的下一级
+        if source_target_mapping and '->' in source_target_mapping:
+            parts = source_target_mapping.split('->', 1)
+            if len(parts) == 2:
+                source_base_dir = parts[0].strip()
+                if source_base_dir:
+                    normalized_source = os.path.normpath(source_base_dir)
+                    normalized_dir = os.path.normpath(directory)
+                    
+                    # 检查目录是否在源基础目录下
+                    if normalized_dir.startswith(normalized_source + os.sep):
+                        # 获取相对于源目录的第一级子目录
+                        rel_path = os.path.relpath(normalized_dir, normalized_source)
+                        first_subdir = rel_path.split(os.sep)[0] if rel_path else ""
+                        
+                        # 如果是源基础目录本身，跳过清理
+                        if not first_subdir:
+                            return
+                        
+                        # 计算停止清理的目录
+                        stop_dir = os.path.join(normalized_source, first_subdir)
+                        
+                        # 从当前目录向上清理，但不超过停止目录
+                        current = normalized_dir
+                        while current != stop_dir and os.path.dirname(current) != current:
+                            if os.path.isdir(current) and not os.listdir(current):
+                                os.rmdir(current)
+                                log.info(f"Removed empty directory: {current}")
+                                current = os.path.dirname(current)
+                            else:
+                                break
+                        
+                        # 检查停止目录本身是否需要清理
+                        if os.path.isdir(stop_dir) and current == stop_dir and not os.listdir(stop_dir):
+                            os.rmdir(stop_dir)
+                            log.info(f"Removed empty stop directory: {stop_dir}")
+                        return
+
+        # 无映射的情况：根据文件来源决定是否清理
+        if not source_target_mapping:
+            # 如果文件不是从目标目录内移动（即从外部移动到目标目录），则不清理
+            if not is_moving_from_target_dir:
+                log.debug(f"Skip cleaning for file moved from outside target directory: {directory}")
+                return
+
+        # 通用清理逻辑：从当前目录向上清理到 base_path
+        current = dir_path
+        while current != base_path and os.path.dirname(current) != current:
+            if os.path.isdir(current) and not os.listdir(current):
+                os.rmdir(current)
+                log.info(f"Removed empty directory: {current}")
+                current = os.path.dirname(current)
             else:
-                # 如果路径不存在，向上移动
-                dir_path = os.path.dirname(dir_path)
+                break
+                
     except Exception as e:
         log.error(f"Error removing empty parent directories: {e}")
 
@@ -1286,7 +1351,7 @@ def regenerate_file_at_target(file_obj: Dict[str, Any], scene: Dict[str, Any], s
             # 获取配置来确定基础路径（目标目录或映射的目标目录）
             source_target_mapping = settings.get("source_target_mapping", "").strip()
             base_path = ""
-            
+
             if source_target_mapping and '->' in source_target_mapping:
                 # 有映射：使用映射的目标目录
                 parts = source_target_mapping.split('->', 1)
@@ -1295,9 +1360,12 @@ def regenerate_file_at_target(file_obj: Dict[str, Any], scene: Dict[str, Any], s
             else:
                 # 无映射：使用目标根目录
                 base_path = settings.get("target_root", "").strip()
-            
+
             if base_path:
-                remove_empty_parent_dirs(original_dir, base_path)
+                # 判断是否应该清理目录
+                is_moving_from_target_dir = should_clean_directory(original_dir, settings)
+                
+                remove_empty_parent_dirs(original_dir, base_path, source_target_mapping, is_moving_from_target_dir)
 
         log.info(f"Regenerated file at new location: '{file_path}' -> '{new_target_path}'")
         return True
