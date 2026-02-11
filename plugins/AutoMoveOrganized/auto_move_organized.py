@@ -90,18 +90,9 @@ def load_settings(stash: StashInterface) -> Dict[str, Any]:
             "move_only_organized": True,
             "dry_run": False,
         }
-    # 调试用：保存一份完整配置到本地，结构与 stash_configuration.json 相同
-    # try:
-    #     with open("stash_configuration.json", "w", encoding="utf-8") as f:
-    #         json.dump(cfg, f, ensure_ascii=False, indent=5)
-    # except Exception:
-    #     pass
 
     plugins_settings = cfg.get("plugins", {}).get("auto_move_organized", {})
 
-    # 保存一份到本地，便于调试
-    # with open("auto_move_organized_plugins_settings.json", "w", encoding="utf-8") as f:
-    #     json.dump(plugins_settings, f, ensure_ascii=False, indent=4)
 
     def _get_val(key: str, default):
         v = plugins_settings.get(key, default)
@@ -1672,32 +1663,6 @@ def download_scene_art(video_path: str, scene: Dict[str, Any], settings: Dict[st
             return
 
     # 如果没有匹配的 -poster 文件，但目录里存在"旧命名"的 -poster 文件，尝试重命名为新前缀
-    # existing_posters = []
-    # try:
-    #     for name in os.listdir(video_dir):
-    #         stem, ext = os.path.splitext(name)
-    #         if ext.lower() not in exts:
-    #             continue
-    #         if stem.endswith("-poster") and stem != poster_stem:
-    #             existing_posters.append(os.path.join(video_dir, name))
-    # except Exception as e:
-    #     log.error(f"扫描目录中的旧 poster 文件失败: {e}")
-
-    # if len(existing_posters) == 1:
-    #     old_path = existing_posters[0]
-    #     old_ext = os.path.splitext(old_path)[1]
-    #     new_path = poster_base + old_ext
-
-    #     if settings.get("dry_run"):
-    #         log.info(f"[dry_run] Would rename poster: '{old_path}' -> '{new_path}'")
-    #         return
-
-    #     try:
-    #         os.rename(old_path, new_path)
-    #         log.info(f"Renamed poster: '{old_path}' -> '{new_path}'")
-    #         return
-    #     except Exception as e:
-    #         log.error(f"重命名 poster 文件失败 '{old_path}' -> '{new_path}': {e}")
     # 如果重命名失败，则继续尝试重新下载
 
     abs_url = build_absolute_url(poster_url, settings)
@@ -2223,9 +2188,6 @@ def handle_hook_or_task(stash: StashInterface, args: Dict[str, Any], settings: D
 
     for index, scene in enumerate(scenes, start=1):
         sid = int(scene["id"])
-        # 保存json, 调试用（如不需要可保持注释状态）
-        # with open(f'scene-{sid}.json', 'w', encoding='utf-8') as f:
-        #     json.dump(scene, f, indent=2, ensure_ascii=False)
 
         if not scene.get("organized") and settings.get("move_only_organized"):
             # 仍然更新一下进度条
@@ -2240,7 +2202,6 @@ def handle_hook_or_task(stash: StashInterface, args: Dict[str, Any], settings: D
 
         moved = process_scene(scene, settings)
         total_moved += moved
-        # break  # 单个完成后打断, 方便调试
 
     msg = (
         f"Scanned {total_scenes} scenes, "
@@ -2252,14 +2213,10 @@ def handle_hook_or_task(stash: StashInterface, args: Dict[str, Any], settings: D
     return msg
 
 
-def read_input_file():
-    with open('input.json', 'r', encoding='utf-8') as f:
-        return json.load(f)
 
 
 def main():
     json_input = read_input()  # 插件运行时从 stdin 读
-    # json_input = read_input_file()  # 调试时从文件读
     print(json_input)
     log.info(f"Plugin input: {json_input}")
     server_conn = json_input.get("server_connection") or {}
@@ -2279,8 +2236,6 @@ def main():
     # 把 server_connection 也塞到 settings 里，方便下载图片等功能使用 cookie
     settings["server_connection"] = server_conn
 
-    # with open('settings.json', 'w', encoding='utf-8') as f:
-    #     json.dump(settings, f, indent=2, ensure_ascii=False)
 
     try:
         msg = handle_hook_or_task(stash, args, settings)
