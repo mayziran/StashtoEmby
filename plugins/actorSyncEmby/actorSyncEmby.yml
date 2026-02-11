@@ -1,0 +1,56 @@
+name: actorSyncEmby
+description: "将Stash中的演员信息（图片和NFO文件）导出到指定目录，并可选择性地将这些信息上传到Emby服务器。"
+version: "1.0.0"
+url: https://github.com/mayziran/StashtoEmby/tree/main/plugins/actorSyncEmby
+
+settings:
+  actorOutputDir:
+    displayName: 演员数据输出目录
+    description: "演员图片和NFO文件将保存到此目录下，例如：/data/actors"
+    type: STRING
+  exportActorNfo:
+    displayName: 导出演员NFO
+    description: "导出演员NFO文件到actors目录（即使关闭此选项，元数据仍可通过API直接上传到Emby）"
+    type: BOOLEAN
+  downloadActorImages:
+    displayName: 下载演员图片
+    description: "下载演员图片到actors目录（如果关闭此选项，将不会上传图片到Emby）"
+    type: BOOLEAN
+  syncToEmby:
+    displayName: 同步到Emby
+    description: "将演员信息上传到Emby服务器"
+    type: BOOLEAN
+  syncMode:
+    displayName: 同步模式
+    description: "1-覆盖Emby元数据和图片, 2-覆盖Emby元数据, 3-补齐Emby缺失的数据和图片"
+    type: NUMBER
+  embyServer:
+    displayName: Emby服务器地址
+    description: "Emby服务器地址，例如：http://192.168.1.100:8096"
+    type: STRING
+  embyApiKey:
+    displayName: Emby API密钥
+    description: "Emby服务器API密钥"
+    type: STRING
+  dryRun:
+    displayName: 仅模拟
+    description: "不真正执行任何文件操作，只输出日志"
+    type: BOOLEAN
+
+exec:
+  - python
+  - "{pluginDir}/actorSyncEmby.py"
+interface: raw
+errLog: info
+
+tasks:
+  - name: 同步所有演员
+    description: "手动执行：同步所有演员信息到本地和Emby"
+    defaultArgs: {}
+
+hooks:
+  - name: syncActorOnUpdate
+    description: "在演员更新后自动同步演员信息"
+    triggeredBy:
+      - Performer.Update.Post
+    defaultArgs: {}
