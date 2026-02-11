@@ -472,14 +472,6 @@ def _parse_source_target_mapping(source_target_mapping: str) -> tuple[str, str] 
     return None
 
 
-def _is_file_in_directory(file_path: str, directory: str) -> bool:
-    """
-    检查文件是否在指定目录下
-    """
-    normalized_file_path = os.path.normpath(file_path)
-    normalized_directory = os.path.normpath(directory)
-    return normalized_file_path.startswith(normalized_directory + os.sep) or normalized_file_path == normalized_directory
-
 
 def _handle_source_mapping_logic(file_path: str, source_base_dir: str, target_base_dir: str, 
                                scene: Dict[str, Any], file_obj: Dict[str, Any], settings: Dict[str, Any]) -> str:
@@ -897,12 +889,12 @@ def get_all_scenes(stash: StashInterface, settings: Dict[str, Any], per_page: in
             source_base_dir = parts[0].strip()
             if source_base_dir:
                 # 使用正则表达式筛选源路径下的文件
-                # 转义路径中的特殊字符
-                escaped_path = source_base_dir.replace('\\', '\\\\').replace('.', '\\.').replace('[', '\\[').replace(']', '\\]')
+                # 转义路径中的特殊字符，确保精确匹配（防止"已整理"匹配"已整理2"）
+                escaped_path = re.escape(source_base_dir)
                 query_f = {
                     "path": {
                         "modifier": "MATCHES_REGEX",
-                        "value": f"^{escaped_path}.*"
+                        "value": f"^({escaped_path})(/.*|$)"
                     }
                 }
     else:
@@ -910,11 +902,12 @@ def get_all_scenes(stash: StashInterface, settings: Dict[str, Any], per_page: in
         target_root = settings.get("target_root", "").strip()
         if target_root:
             # 使用正则表达式筛选不在目标路径的文件
-            escaped_target = target_root.replace('\\', '\\\\').replace('.', '\\.').replace('[', '\\[').replace(']', '\\]')
+            # 使用re.escape转义特殊字符，确保精确匹配
+            escaped_target = re.escape(target_root)
             query_f = {
                 "path": {
                     "modifier": "NOT_MATCHES_REGEX",
-                    "value": f"^{escaped_target}.*"
+                    "value": f"^({escaped_target})(/.*|$)"
                 }
             }
 
@@ -982,7 +975,7 @@ def is_file_in_target_location(file_path: str, scene: Dict[str, Any], file_obj: 
         # 规范化路径
         normalized_current = os.path.normpath(file_path)
         normalized_target_root = os.path.normpath(target_root)
-        
+
         # 检查当前路径是否在目标根目录下
         return normalized_current.startswith(normalized_target_root + os.sep) or normalized_current == normalized_target_root
     except Exception:
