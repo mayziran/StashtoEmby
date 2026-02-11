@@ -689,7 +689,7 @@ def move_file_with_graphql(stash: StashInterface, file_id: str, dest_folder: str
         return False
 
 
-def move_file_with_suffix_handling(scene: Dict[str, Any], file_obj: Dict[str, Any], settings: Dict[str, Any], used_paths: set, file_idx: int) -> bool:
+def move_file_with_suffix_handling(scene: Dict[str, Any], file_obj: Dict[str, Any], settings: Dict[str, Any]) -> bool:
     """执行单个文件的移动操作。返回是否真的移动了。"""
     src = file_obj.get("path")
     file_id = file_obj.get("id")
@@ -765,7 +765,7 @@ def move_file_with_suffix_handling(scene: Dict[str, Any], file_obj: Dict[str, An
 
 def move_file(scene: Dict[str, Any], file_obj: Dict[str, Any], settings: Dict[str, Any]) -> bool:
     """执行单个文件的移动操作。返回是否真的移动了。"""
-    return move_file_with_suffix_handling(scene, file_obj, settings, set(), 0)
+    return move_file_with_suffix_handling(scene, file_obj, settings)
 
 
 def process_scene(scene: Dict[str, Any], settings: Dict[str, Any]) -> int:
@@ -815,7 +815,7 @@ def process_scene(scene: Dict[str, Any], settings: Dict[str, Any]) -> int:
             continue
 
         # 调用move_file_with_suffix_handling
-        if move_file_with_suffix_handling(scene, f, settings, set(), idx):
+        if move_file_with_suffix_handling(scene, f, settings):
             moved_count += 1
 
     log.info(f"Scene {scene_id}: moved {moved_count} files")
