@@ -690,7 +690,7 @@ def move_file_with_graphql(stash: StashInterface, file_id: str, dest_folder: str
 
 
 def move_file_with_suffix_handling(scene: Dict[str, Any], file_obj: Dict[str, Any], settings: Dict[str, Any], used_paths: set, file_idx: int) -> bool:
-    """执行单个文件的移动操作，处理路径冲突。返回是否真的移动了。"""
+    """执行单个文件的移动操作。返回是否真的移动了。"""
     src = file_obj.get("path")
     file_id = file_obj.get("id")
 
@@ -711,30 +711,15 @@ def move_file_with_suffix_handling(scene: Dict[str, Any], file_obj: Dict[str, An
     dst_dir = os.path.dirname(dst)
     dst_basename = os.path.basename(dst)
 
-    # 检查路径冲突，如果存在则添加后缀
-    original_dst_basename, dst_ext = os.path.splitext(dst_basename)
-    counter = 1
-    final_dst_basename = dst_basename
-
-    while final_dst_basename in used_paths:
-        # 添加序号后缀，如 (2), (3), 等
-        final_dst_basename = f"{original_dst_basename} ({counter + 1}){dst_ext}"
-        counter += 1
-
-    # 添加到已使用路径集合
-    used_paths.add(final_dst_basename)
-
     # 记录原始目录，用于后续清理空目录
     original_dir = os.path.dirname(src)
 
     try:
         if not settings.get("dry_run"):
             # 使用GraphQL API移动文件，这样Stash会自动更新数据库
-            success = move_file_with_graphql(settings.get("stash_interface"), file_id, dst_dir, final_dst_basename)
+            success = move_file_with_graphql(settings.get("stash_interface"), file_id, dst_dir, dst_basename)
             if not success:
                 log.error(f"GraphQL moveFiles failed for file id={file_id}")
-                # 从已使用路径集合中移除，因为移动失败
-                used_paths.discard(final_dst_basename)
                 return False
         else:
             # dry_run模式下创建目标目录
@@ -742,7 +727,7 @@ def move_file_with_suffix_handling(scene: Dict[str, Any], file_obj: Dict[str, An
 
         # 执行后处理（如移动字幕、生成NFO等）
         # 使用最终的目标路径
-        final_dst = os.path.join(dst_dir, final_dst_basename)
+        final_dst = os.path.join(dst_dir, dst_basename)
         try:
             # 在dry_run模式下，我们使用原始路径作为源路径，目标路径作为目标路径
             # 在非dry_run模式下，文件已经被GraphQL移动，但我们仍需执行后处理
@@ -768,23 +753,19 @@ def move_file_with_suffix_handling(scene: Dict[str, Any], file_obj: Dict[str, An
             if base_path:
                 # 判断是否应该清理目录
                 is_moving_from_target_dir = should_clean_directory(original_dir, settings)
-                
+
                 remove_empty_parent_dirs(original_dir, base_path, source_target_mapping, is_moving_from_target_dir)
 
         log.info(f"Moved file: '{src}' -> '{final_dst}' (dry_run={settings.get('dry_run')})")
         return True
     except Exception as e:
         log.error(f"移动文件失败 '{src}' -> '{final_dst}': {e}")
-        # 从已使用路径集合中移除，因为移动失败
-        used_paths.discard(final_dst_basename)
         return False
 
 
 def move_file(scene: Dict[str, Any], file_obj: Dict[str, Any], settings: Dict[str, Any]) -> bool:
     """执行单个文件的移动操作。返回是否真的移动了。"""
-    # 为了向后兼容，创建一个临时的used_paths集合
-    used_paths = set()
-    return move_file_with_suffix_handling(scene, file_obj, settings, used_paths, 0)
+    return move_file_with_suffix_handling(scene, file_obj, settings, set(), 0)
 
 
 def process_scene(scene: Dict[str, Any], settings: Dict[str, Any]) -> int:
@@ -821,9 +802,6 @@ def process_scene(scene: Dict[str, Any], settings: Dict[str, Any]) -> int:
 
     moved_count = 0
 
-    # 跟踪已使用的路径，用于处理冲突
-    used_paths = set()
-
     def _is_file_organized(file_obj: Dict[str, Any]) -> bool:
         if not settings.get("move_only_organized"):
             return True
@@ -836,8 +814,8 @@ def process_scene(scene: Dict[str, Any], settings: Dict[str, Any]) -> int:
         if not _is_file_organized(f):
             continue
 
-        # 调用move_file_with_suffix_handling来处理路径冲突
-        if move_file_with_suffix_handling(scene, f, settings, used_paths, idx):
+        # 调用move_file_with_suffix_handling
+        if move_file_with_suffix_handling(scene, f, settings, set(), idx):
             moved_count += 1
 
     log.info(f"Scene {scene_id}: moved {moved_count} files")
