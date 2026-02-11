@@ -1765,6 +1765,22 @@ def download_scene_art(video_path: str, scene: Dict[str, Any], settings: Dict[st
         log.error(f"叠加厂商 logo 到 poster 时出错: {e}")
 
 
+def _find_file_with_extensions(base_path: str, extensions: tuple) -> str | None:
+    """
+    根据基本路径和扩展名列表查找存在的文件
+    """
+    for ext in extensions:
+        candidate = base_path + ext
+        if os.path.exists(candidate):
+            return candidate
+
+    # 兼容没有扩展名的文件
+    if os.path.exists(base_path):
+        return base_path
+
+    return None
+
+
 def overlay_studio_logo_on_poster(poster_base: str, scene: Dict[str, Any], settings: Dict[str, Any]) -> None:
     """
     在已下载好的 poster 右上角叠加厂商 logo。
@@ -1794,16 +1810,7 @@ def overlay_studio_logo_on_poster(poster_base: str, scene: Dict[str, Any], setti
 
     # 找到实际的 poster 文件（带扩展名）
     exts = (".jpg", ".jpeg", ".png", ".webp", ".gif", ".svg")
-    poster_path = None
-    for ext in exts:
-        candidate = poster_base + ext
-        if os.path.exists(candidate):
-            poster_path = candidate
-            break
-
-    # 兼容没有扩展名的 poster 文件
-    if not poster_path and os.path.exists(poster_base):
-        poster_path = poster_base
+    poster_path = _find_file_with_extensions(poster_base, exts)
 
     if not poster_path:
         log.warning(f"Poster file not found for overlay, base='{poster_base}'")
@@ -1833,16 +1840,7 @@ def overlay_studio_logo_on_poster(poster_base: str, scene: Dict[str, Any], setti
     safe_name = safe_segment(studio_name)
     logo_base = os.path.join(poster_dir, f"{safe_name}-logo")
 
-    logo_path = None
-    for ext in exts:
-        candidate = logo_base + ext
-        if os.path.exists(candidate):
-            logo_path = candidate
-            break
-
-    # 兼容没有扩展名的 logo 文件
-    if not logo_path and os.path.exists(logo_base):
-        logo_path = logo_base
+    logo_path = _find_file_with_extensions(logo_base, exts)
 
     if not logo_path:
         abs_logo_url = build_absolute_url(studio_image_url, settings)
@@ -1853,14 +1851,7 @@ def overlay_studio_logo_on_poster(poster_base: str, scene: Dict[str, Any], setti
             log.error("Failed to download studio logo, skip overlay")
             return
 
-        for ext in exts:
-            candidate = logo_base + ext
-            if os.path.exists(candidate):
-                logo_path = candidate
-                break
-
-        if not logo_path and os.path.exists(logo_base):
-            logo_path = logo_base
+        logo_path = _find_file_with_extensions(logo_base, exts)
 
     if not logo_path:
         log.warning(f"Studio logo file not found for overlay, base='{logo_base}'")
@@ -1981,7 +1972,7 @@ def overlay_studio_logo_on_poster(poster_base: str, scene: Dict[str, Any], setti
         cleanup_exts = (".jpg", ".jpeg", ".png", ".webp", ".gif", ".svg")
         for ext in cleanup_exts:
             candidate = logo_base + ext
-            if os.path.exists(candidate):
+            if os.path.exists(candidate) and candidate != logo_path:
                 try:
                     os.remove(candidate)
                 except Exception as e_remove:
