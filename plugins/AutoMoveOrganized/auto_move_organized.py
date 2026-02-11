@@ -467,6 +467,91 @@ def _apply_template_and_suffix(template: str, scene: Dict[str, Any], file_path: 
     return filename_clean
 
 
+def _parse_source_target_mapping(source_target_mapping: str) -> tuple[str, str] | None:
+    """
+    解析源目录到目标目录的映射设置
+    """
+    if '->' in source_target_mapping:
+        parts = source_target_mapping.split('->', 1)
+        if len(parts) == 2:
+            source_base_dir = parts[0].strip()
+            target_base_dir = parts[1].strip()
+            if source_base_dir and target_base_dir:
+                return source_base_dir, target_base_dir
+    return None
+
+
+def _is_file_in_directory(file_path: str, directory: str) -> bool:
+    """
+    检查文件是否在指定目录下
+    """
+    normalized_file_path = os.path.normpath(file_path)
+    normalized_directory = os.path.normpath(directory)
+    return normalized_file_path.startswith(normalized_directory + os.sep) or normalized_file_path == normalized_directory
+
+
+def _handle_source_mapping_logic(file_path: str, source_base_dir: str, target_base_dir: str, 
+                               scene: Dict[str, Any], file_obj: Dict[str, Any], settings: Dict[str, Any]) -> str:
+    """
+    处理源目录映射逻辑
+    """
+    # 计算相对于源基础目录的路径
+    rel_path_from_base = os.path.relpath(file_path, source_base_dir)
+
+    # 获取第一级子目录（如果存在）
+    rel_parts = rel_path_from_base.split(os.sep)
+    first_level_dir = rel_parts[0] if rel_parts and rel_parts[0] else ""
+
+    # 使用模板生成文件名部分
+    template = settings["filename_template"].strip()
+    
+    # 应用模板并添加后缀
+    filename_clean = _apply_template_and_suffix(template, scene, file_path, file_obj, settings)
+
+    # 组合最终路径：目标基础目录 + 第一级子目录 + 文件名
+    abs_target = os.path.join(target_base_dir, first_level_dir, filename_clean)
+    return os.path.normpath(abs_target)
+
+
+def _handle_target_mapping_logic(file_path: str, target_base_dir: str, 
+                              scene: Dict[str, Any], file_obj: Dict[str, Any], settings: Dict[str, Any]) -> str:
+    """
+    处理目标目录映射逻辑
+    """
+    # 计算相对于目标基础目录的路径，获取第一级子目录
+    rel_path_from_base = os.path.relpath(file_path, target_base_dir)
+    rel_parts = rel_path_from_base.split(os.sep)
+    first_level_dir = rel_parts[0] if rel_parts and rel_parts[0] else ""
+
+    # 使用模板生成文件名部分
+    template = settings["filename_template"].strip()
+    
+    # 应用模板并添加后缀
+    filename_clean = _apply_template_and_suffix(template, scene, file_path, file_obj, settings)
+
+    # 组合最终路径：目标基础目录 + 第一级子目录 + 文件名
+    abs_target = os.path.join(target_base_dir, first_level_dir, filename_clean)
+    return os.path.normpath(abs_target)
+
+
+def _handle_no_mapping_case(scene: Dict[str, Any], file_path: str, file_obj: Dict[str, Any], settings: Dict[str, Any]) -> str:
+    """
+    处理没有映射的情况
+    """
+    target_root = settings["target_root"].strip()
+    if not target_root:
+        raise RuntimeError("目标目录(target_root)未配置")
+
+    # 使用模板生成路径
+    template = settings["filename_template"].strip()
+    
+    # 应用模板并添加后缀
+    rel_path_clean = _apply_template_and_suffix(template, scene, file_path, file_obj, settings)
+
+    abs_target = os.path.join(target_root, rel_path_clean)
+    return abs_target
+
+
 def build_target_path(
         scene: Dict[str, Any],
         file_path: str,
@@ -505,93 +590,33 @@ def build_target_path(
 
     # 如果设置了源目录到目标目录的映射，则使用映射逻辑
     if source_target_mapping:
-        # 解析映射设置，格式为 "源目录->目标目录" (简化版)
-        if '->' in source_target_mapping:
-            parts = source_target_mapping.split('->', 1)
-            if len(parts) == 2:
-                source_base_dir = parts[0].strip()
-                target_base_dir = parts[1].strip()
+        # 解析映射设置，格式为 "源目录->目标目录"
+        mapping_result = _parse_source_target_mapping(source_target_mapping)
+        if mapping_result:
+            source_base_dir, target_base_dir = mapping_result
+            
+            # 规范化路径分隔符
+            normalized_source_base = os.path.normpath(source_base_dir)
+            normalized_target_base = os.path.normpath(target_base_dir)
+            normalized_file_path = os.path.normpath(file_path)
 
-                if source_base_dir and target_base_dir:
-                    # 规范化路径分隔符
-                    normalized_source_base = os.path.normpath(source_base_dir)
-                    normalized_target_base = os.path.normpath(target_base_dir)
-                    normalized_file_path = os.path.normpath(file_path)
-
-                    # 检查文件路径是否以源基础目录开头（源目录文件）
-                    if normalized_file_path.startswith(normalized_source_base + os.sep) or normalized_file_path == normalized_source_base:
-                        # 计算相对于源基础目录的路径
-                        rel_path_from_base = os.path.relpath(file_path, normalized_source_base)
-
-                        # 获取第一级子目录（如果存在）
-                        rel_parts = rel_path_from_base.split(os.sep)
-                        first_level_dir = rel_parts[0] if rel_parts and rel_parts[0] else ""
-
-                        # 使用模板生成文件名部分
-                        template = settings["filename_template"].strip()
-                        
-                        # 应用模板并添加后缀
-                        filename_clean = _apply_template_and_suffix(template, scene, file_path, file_obj, settings)
-
-                        # 组合最终路径：目标基础目录 + 第一级子目录 + 文件名
-                        abs_target = os.path.join(target_base_dir, first_level_dir, filename_clean)
-                        return os.path.normpath(abs_target)
-                    # 检查文件路径是否以目标基础目录开头（目标目录文件）
-                    elif normalized_file_path.startswith(normalized_target_base + os.sep) or normalized_file_path == normalized_target_base:
-                        # 文件已经在目标目录，使用目标目录映射逻辑
-                        # 计算相对于目标基础目录的路径，获取第一级子目录
-                        rel_path_from_base = os.path.relpath(file_path, normalized_target_base)
-                        rel_parts = rel_path_from_base.split(os.sep)
-                        first_level_dir = rel_parts[0] if rel_parts and rel_parts[0] else ""
-
-                        # 使用模板生成文件名部分
-                        template = settings["filename_template"].strip()
-                        
-                        # 应用模板并添加后缀
-                        filename_clean = _apply_template_and_suffix(template, scene, file_path, file_obj, settings)
-
-                        # 组合最终路径：目标基础目录 + 第一级子目录 + 文件名
-                        abs_target = os.path.join(target_base_dir, first_level_dir, filename_clean)
-                        return os.path.normpath(abs_target)
-                    else:
-                        # 文件既不在源目录也不在目标目录，使用标准路径构建逻辑
-                        # 这种情况可能发生在文件已被移动到其他位置或路径配置变更
-                        log.warning(f"文件路径 '{file_path}' 既不在源基础目录 '{source_base_dir}' 也不在目标目录 '{target_base_dir}' 下，使用标准路径构建逻辑")
-                        # 使用标准的路径构建逻辑（不使用映射）
-                        target_root = settings["target_root"].strip()
-                        if not target_root:
-                            raise RuntimeError("目标目录(target_root)未配置，无法构建路径")
-
-                        # 使用模板生成路径
-                        template = settings["filename_template"].strip()
-                        
-                        # 应用模板并添加后缀
-                        rel_path_clean = _apply_template_and_suffix(template, scene, file_path, file_obj, settings)
-
-                        abs_target = os.path.join(target_root, rel_path_clean)
-                        return abs_target
-                else:
-                    # 如果源目录或目标目录为空，抛出错误
-                    raise RuntimeError("源目录或目标目录不能为空")
+            # 检查文件路径是否以源基础目录开头（源目录文件）
+            if normalized_file_path.startswith(normalized_source_base + os.sep) or normalized_file_path == normalized_source_base:
+                return _handle_source_mapping_logic(file_path, source_base_dir, target_base_dir, scene, file_obj, settings)
+            # 检查文件路径是否以目标基础目录开头（目标目录文件）
+            elif normalized_file_path.startswith(normalized_target_base + os.sep) or normalized_file_path == normalized_target_base:
+                return _handle_target_mapping_logic(file_path, target_base_dir, scene, file_obj, settings)
             else:
-                # 如果格式不正确，抛出错误
-                raise RuntimeError("源目录到目标目录的映射格式错误，应为 '源目录->目标目录'")
+                # 文件既不在源目录也不在目标目录，使用标准路径构建逻辑
+                # 这种情况可能发生在文件已被移动到其他位置或路径配置变更
+                log.warning(f"文件路径 '{file_path}' 既不在源基础目录 '{source_base_dir}' 也不在目标目录 '{target_base_dir}' 下，使用标准路径构建逻辑")
+                return _handle_no_mapping_case(scene, file_path, file_obj, settings)
         else:
             # 如果格式不正确，抛出错误
             raise RuntimeError("源目录到目标目录的映射格式错误，应为 '源目录->目标目录'")
     else:
         # 如果没有设置映射，使用原有逻辑
-        target_root = settings["target_root"].strip()
-        template = settings["filename_template"].strip()
-
-        if not target_root:
-            raise RuntimeError("目标目录(target_root)未配置")
-
-        # 应用模板并添加后缀
-        rel_path_clean = _apply_template_and_suffix(template, scene, file_path, file_obj, settings)
-
-        abs_target = os.path.join(target_root, rel_path_clean)
-        return abs_target
+        return _handle_no_mapping_case(scene, file_path, file_obj, settings)
 
 
 def move_file_with_graphql(stash: StashInterface, file_id: str, dest_folder: str, dest_basename: str) -> bool:
