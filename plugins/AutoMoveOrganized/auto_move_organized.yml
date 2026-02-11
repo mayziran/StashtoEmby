@@ -1,26 +1,71 @@
 # plugins/auto_move_organized.yml
 
 name: Auto Move Organized
-description: >
-  在场景更新后，把已整理(organized)的文件移动到指定目录，并按模板重命名。
-  也可以从 Tasks 页面手动触发。
+description: "在场景更新后，把已整理(organized)的文件移动到指定目录，并按模板重命名。支持Hook模式（自动响应场景更新）和Task模式（手动批量处理）。"
 
 version: "0.2.1"
-url: https://example.com/auto-move-organized
+url: https://github.com/mayziran/StashtoEmby/tree/main/plugins/AutoMoveOrganized
 
 # UI 设置：在设置 -> 插件 -> 本插件 里会显示
 settings:
+  enable_hook_mode:
+    displayName: 启用 Hook 模式
+    description: |
+      启用后，当场景信息更新时自动执行文件整理。
+      Hook模式运行逻辑：
+      1. 有映射时：处理源目录中的文件（移动到目标目录），或目标目录中的文件（更新元数据）
+      2. 无映射时：处理不在目标目录的文件（移动到目标目录），或目标目录中的文件（更新元数据）
+      3. 对于已在目标目录的文件：总是重新生成NFO和封面，若命名规则参数变化则移动到新路径
+    type: BOOLEAN
   target_root:
-    displayName: 目标根目录（移动到此目录下）
+    displayName: 目标根目录
+    description: |
+      移动到此目录下
+      注意：如果设置了源目录映射，此项将被忽略
+    type: STRING
+  source_target_mapping:
+    displayName: 源目录到目标目录的映射
+    description: |
+      格式：源目录->目标目录
+      例如：/data/待整理->/data/已整理
+      注意：源目录下的第一级子目录会映射到目标目录下，文件使用命名模板重命名，/data/待整理/111->/data/已整理/111，/data/待整理/222->/data/已整理/222，会如此处理，这个主要为了整理到不同目录设计，如果使用映射，请按照这个逻辑使用，不然会有未可知bug
     type: STRING
   filename_template:
-    displayName: 命名模板（相对 target_root 的路径+文件名）\n可用占位符示例（不完全列表，实际以 build_template_vars 返回为准）：\n      {id}                -> scene id\n      {scene_title}       -> 场景标题\n      {scene_date}        -> 场景日期（原始字符串，例如 2025-01-02）\n      {date_year}         -> 场景年份\n      {date_month}        -> 场景月份（两位）\n      {date_day}          -> 场景日期（两位）\n      {studio} / {studio_name}\n      {studio_id}\n      {code}\n      {director}\n      {performers}\n      {first_performer}\n      {performer_count}\n      {tag_names} / {tags}\n      {group_name}\n      {rating} / {rating100}\n      {resolution}\n      {quality}\n      {original_basename}\n      {original_name}\n      {ext}
+    displayName: 命名模板
+    description: |
+      相对 target_root 的路径+文件名
+      可用占位符示例（不完全列表，实际以 build_template_vars 返回为准）：
+            {id}                -> scene id
+            {scene_title}       -> 场景标题
+            {scene_date}        -> 场景日期（原始字符串，例如 2025-01-02）
+            {date_year}         -> 场景年份
+            {date_month}        -> 场景月份（两位）
+            {date_day}          -> 场景日期（两位）
+            {studio} / {studio_name}
+            {studio_id}
+            {code}
+            {director}
+            {performers}
+            {first_performer}
+            {performer_count}
+            {tag_names} / {tags}
+            {group_name}
+            {rating} / {rating100}
+            {resolution}
+            {quality}
+            {original_basename}
+            {original_name}
+            {ext}
+
+            模板示例：{studio}/{date_year}/{scene_date} - {scene_title}[{performers}]/{scene_date} - {scene_title}[{performers}]-{resolution}.{ext}
+            注意：没有{ext} 部分文件会报错
     type: STRING
   move_only_organized:
     displayName: 只移动「已整理」文件
     type: BOOLEAN
   dry_run:
-    displayName: 仅模拟（不真的移动）
+    displayName: 仅模拟
+    description: 不真的移动
     type: BOOLEAN
   write_nfo:
     displayName: 生成 NFO 文件
@@ -30,12 +75,7 @@ settings:
     type: BOOLEAN
   overlay_studio_logo_on_poster:
     displayName: 在封面右上角叠加厂商图标
-    type: BOOLEAN
-  download_actor_images:
-    displayName: 下载演员图片到 actors 目录
-    type: BOOLEAN
-  export_actor_nfo:
-    displayName: 导出演员 NFO（actors 目录）
+    description: 可能会需要自行安装 Pillow cairosvg
     type: BOOLEAN
   translate_enable:
     displayName: 启用 AI 翻译
@@ -56,10 +96,23 @@ settings:
     displayName: 翻译模型名称
     type: STRING
   translate_temperature:
-    displayName: 翻译温度 (0-2，字符串)
+    displayName: 翻译温度
+    description: 0-2，字符串
     type: STRING
   translate_prompt:
-    displayName: 翻译提示词 (system prompt)
+    displayName: 翻译提示词
+    description: system prompt
+    type: STRING
+  multi_file_mode:
+    displayName: 多文件模式
+    description: |
+      如何处理包含多个文件的场景：
+      all - 处理所有文件（默认）
+            注意：如果使用此模式，建议不要在路径模板的目录部分使用
+            {resolution}, {quality} 等文件级变量，
+            否则不同文件可能被整理到不同目录
+      primary_only - 只处理第一个文件
+      skip - 跳过多文件场景
     type: STRING
 
 # 外部脚本调用方式
@@ -80,7 +133,7 @@ tasks:
 
 hooks:
   - name: run
-    description: 在场景更新后自动移动该场景下的已整理文件(暂未实现功能)
+    description: 在场景更新后自动移动该场景下的已整理文件（需要启用Hook模式）
     triggeredBy:
       - Scene.Update.Post
     defaultArgs: {}

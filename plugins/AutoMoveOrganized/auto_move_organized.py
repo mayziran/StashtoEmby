@@ -116,8 +116,6 @@ def load_settings(stash: StashInterface) -> Dict[str, Any]:
     dry_run = bool(_get_val("dry_run", False))
     write_nfo = bool(_get_val("write_nfo", True))
     download_poster = bool(_get_val("download_poster", True))
-    download_actor_images = bool(_get_val("download_actor_images", True))
-    export_actor_nfo = bool(_get_val("export_actor_nfo", True))
     overlay_studio_logo_on_poster = bool(_get_val("overlay_studio_logo_on_poster", False))
 
     # AI / 翻译 相关配置
@@ -138,6 +136,12 @@ def load_settings(stash: StashInterface) -> Dict[str, Any]:
         stash_api_key = cfg.get("general", {}).get("apiKey") or ""
     except Exception:
         stash_api_key = ""
+
+    # 新增：启用 Hook 模式设置
+    enable_hook_mode = bool(_get_val("enable_hook_mode", True))
+    # 新增：源目录到目标目录的映射设置
+    source_target_mapping = _get_val("source_target_mapping", "")
+
     # translate_temperature = None
     # try:
     #     if temp_raw is not None and str(temp_raw).strip() != "":
@@ -149,8 +153,7 @@ def load_settings(stash: StashInterface) -> Dict[str, Any]:
         f"Loaded settings: target_root='{target_root}', "
         f"template='{filename_template}', move_only_organized={move_only_org}, "
         f"dry_run={dry_run}, write_nfo={write_nfo}, "
-        f"download_poster={download_poster}, download_actor_images={download_actor_images}, "
-        f"export_actor_nfo={export_actor_nfo}, "
+        f"download_poster={download_poster}, "
         f"overlay_studio_logo_on_poster={overlay_studio_logo_on_poster}"
     )
 
@@ -168,8 +171,6 @@ def load_settings(stash: StashInterface) -> Dict[str, Any]:
         "dry_run": dry_run,
         "write_nfo": write_nfo,
         "download_poster": download_poster,
-        "download_actor_images": download_actor_images,
-        "export_actor_nfo": export_actor_nfo,
         "overlay_studio_logo_on_poster": overlay_studio_logo_on_poster,
         # AI / 翻译
         "translate_enable": translate_enable,
@@ -182,6 +183,10 @@ def load_settings(stash: StashInterface) -> Dict[str, Any]:
         "translate_prompt": translate_prompt,
         # Stash 全局 API Key，用于下载图片时避免 Session 失效问题
         "stash_api_key": stash_api_key,
+        # 新增：源目录到目标目录的映射
+        "source_target_mapping": source_target_mapping,
+        # 新增：启用 Hook 模式
+        "enable_hook_mode": enable_hook_mode,
     }
 
 
@@ -195,6 +200,39 @@ def safe_segment(segment: str) -> str:
     segment = re.sub(r'[<>:"|?*]', "_", segment)
     # 防止空字符串
     return segment or "_"
+
+
+def apply_multi_file_suffix(filename: str, scene: Dict[str, Any], file_obj: Dict[str, Any], settings: Dict[str, Any]) -> str:
+    """
+    为同一场景的多个文件添加区分后缀（仅在 multi_file_mode 为 "all" 时）
+    """
+    # 检查当前使用的多文件模式
+    multi_file_mode = settings.get("multi_file_mode", "all")
+    
+    # 只在 all 模式下添加后缀，primary_only 或 skip 模式下不添加
+    if multi_file_mode != "all":
+        return filename
+    
+    # 获取场景中的所有文件
+    all_files = scene.get("files", [])
+    
+    # 如果文件数量不大于1，不需要添加后缀
+    if len(all_files) <= 1:
+        return filename
+    
+    # 优化：创建文件ID到索引的映射，避免重复遍历
+    file_id_to_index = {f.get("id"): idx for idx, f in enumerate(all_files)}
+    
+    # 获取当前文件在场景中的索引
+    current_file_id = file_obj.get("id")
+    file_index = file_id_to_index.get(current_file_id, 0)
+
+    # 为所有文件添加后缀，包括第一个文件
+    # 在文件名主体和扩展名之间添加 -cdN 后缀
+    name_without_ext, file_ext = os.path.splitext(filename)
+    filename = f"{name_without_ext}-cd{file_index + 1}{file_ext}"
+    
+    return filename
 
 
 def build_absolute_url(url: str, settings: Dict[str, Any]) -> str:
@@ -424,49 +462,244 @@ def build_target_path(
       {ext}
     """
 
-    target_root = settings["target_root"].strip()
-    template = settings["filename_template"].strip()
+    # 获取源目录到目标目录的映射设置
+    source_target_mapping = settings.get("source_target_mapping", "").strip()
 
-    if not target_root:
-        raise RuntimeError("目标目录(target_root)未配置")
+    # 如果设置了源目录到目标目录的映射，则使用映射逻辑
+    if source_target_mapping:
+        # 解析映射设置，格式为 "源目录->目标目录" (简化版)
+        if '->' in source_target_mapping:
+            parts = source_target_mapping.split('->', 1)
+            if len(parts) == 2:
+                source_base_dir = parts[0].strip()
+                target_base_dir = parts[1].strip()
 
-    vars_map = build_template_vars(scene, file_path, file_obj)
-    original_basename = vars_map["original_basename"]
-    ext = vars_map["ext"]
+                if source_base_dir and target_base_dir:
+                    # 规范化路径分隔符
+                    normalized_source_base = os.path.normpath(source_base_dir)
+                    normalized_target_base = os.path.normpath(target_base_dir)
+                    normalized_file_path = os.path.normpath(file_path)
 
-    # 避免变量中出现路径分隔符导致被当成子目录
-    vars_map_for_path = dict(vars_map)
-    for k, v in vars_map_for_path.items():
-        if isinstance(v, str):
-            vars_map_for_path[k] = v.replace("\\", "_").replace("/", "_")
+                    # 检查文件路径是否以源基础目录开头（源目录文件）
+                    if normalized_file_path.startswith(normalized_source_base + os.sep) or normalized_file_path == normalized_source_base:
+                        # 计算相对于源基础目录的路径
+                        rel_path_from_base = os.path.relpath(file_path, normalized_source_base)
 
-    # 先做模板替换
+                        # 获取第一级子目录（如果存在）
+                        rel_parts = rel_path_from_base.split(os.sep)
+                        first_level_dir = rel_parts[0] if rel_parts and rel_parts[0] else ""
+
+                        # 使用模板生成文件名部分
+                        template = settings["filename_template"].strip()
+                        vars_map = build_template_vars(scene, file_path, file_obj)
+                        original_basename = vars_map["original_basename"]
+                        ext = vars_map["ext"]
+
+                        # 避免变量中出现路径分隔符导致被当成子目录
+                        vars_map_for_path = dict(vars_map)
+                        for k, v in vars_map_for_path.items():
+                            if isinstance(v, str):
+                                vars_map_for_path[k] = v.replace("\\", "_").replace("/", "_")
+
+                        # 先做模板替换
+                        try:
+                            filename_part = template.format(**vars_map_for_path)
+                        except Exception as e:
+                            raise RuntimeError(f"命名模板解析失败: {e}")
+
+                        # 把路径里的每一段都 sanitize 一下
+                        filename_parts = []
+                        for part in re.split(r"[\\/]+", filename_part):
+                            if part:
+                                filename_parts.append(safe_segment(part))
+
+                        filename_clean = os.path.join(*filename_parts) if filename_parts else original_basename
+
+                        # 如果模板里没有扩展名，就保留原始扩展名
+                        if not os.path.splitext(filename_clean)[1] and ext:
+                            filename_clean = f"{filename_clean}.{ext}"
+
+                        # 为同一场景的多个文件添加区分后缀（仅在 multi_file_mode 为 "all" 时）
+                        filename_clean = apply_multi_file_suffix(filename_clean, scene, file_obj, settings)
+
+                        # 组合最终路径：目标基础目录 + 第一级子目录 + 文件名
+                        abs_target = os.path.join(target_base_dir, first_level_dir, filename_clean)
+                        return os.path.normpath(abs_target)
+                    # 检查文件路径是否以目标基础目录开头（目标目录文件）
+                    elif normalized_file_path.startswith(normalized_target_base + os.sep) or normalized_file_path == normalized_target_base:
+                        # 文件已经在目标目录，使用目标目录映射逻辑
+                        # 计算相对于目标基础目录的路径，获取第一级子目录
+                        rel_path_from_base = os.path.relpath(file_path, normalized_target_base)
+                        rel_parts = rel_path_from_base.split(os.sep)
+                        first_level_dir = rel_parts[0] if rel_parts and rel_parts[0] else ""
+
+                        # 使用模板生成文件名部分
+                        template = settings["filename_template"].strip()
+                        vars_map = build_template_vars(scene, file_path, file_obj)
+                        original_basename = vars_map["original_basename"]
+                        ext = vars_map["ext"]
+
+                        # 避免变量中出现路径分隔符导致被当成子目录
+                        vars_map_for_path = dict(vars_map)
+                        for k, v in vars_map_for_path.items():
+                            if isinstance(v, str):
+                                vars_map_for_path[k] = v.replace("\\", "_").replace("/", "_")
+
+                        # 先做模板替换
+                        try:
+                            filename_part = template.format(**vars_map_for_path)
+                        except Exception as e:
+                            raise RuntimeError(f"命名模板解析失败: {e}")
+
+                        # 把路径里的每一段都 sanitize 一下
+                        filename_parts = []
+                        for part in re.split(r"[\\/]+", filename_part):
+                            if part:
+                                filename_parts.append(safe_segment(part))
+
+                        filename_clean = os.path.join(*filename_parts) if filename_parts else original_basename
+
+                        # 如果模板里没有扩展名，就保留原始扩展名
+                        if not os.path.splitext(filename_clean)[1] and ext:
+                            filename_clean = f"{filename_clean}.{ext}"
+
+                        # 为同一场景的多个文件添加区分后缀（仅在 multi_file_mode 为 "all" 时）
+                        filename_clean = apply_multi_file_suffix(filename_clean, scene, file_obj, settings)
+
+                        # 组合最终路径：目标基础目录 + 第一级子目录 + 文件名
+                        abs_target = os.path.join(target_base_dir, first_level_dir, filename_clean)
+                        return os.path.normpath(abs_target)
+                    else:
+                        # 文件既不在源目录也不在目标目录，使用标准路径构建逻辑
+                        # 这种情况可能发生在文件已被移动到其他位置或路径配置变更
+                        log.warning(f"文件路径 '{file_path}' 既不在源基础目录 '{source_base_dir}' 也不在目标目录 '{target_base_dir}' 下，使用标准路径构建逻辑")
+                        # 使用标准的路径构建逻辑（不使用映射）
+                        target_root = settings["target_root"].strip()
+                        if not target_root:
+                            raise RuntimeError("目标目录(target_root)未配置，无法构建路径")
+                        
+                        # 使用模板生成路径
+                        template = settings["filename_template"].strip()
+                        vars_map = build_template_vars(scene, file_path, file_obj)
+                        original_basename = vars_map["original_basename"]
+                        ext = vars_map["ext"]
+
+                        # 避免变量中出现路径分隔符导致被当成子目录
+                        vars_map_for_path = dict(vars_map)
+                        for k, v in vars_map_for_path.items():
+                            if isinstance(v, str):
+                                vars_map_for_path[k] = v.replace("\\", "_").replace("/", "_")
+
+                        # 先做模板替换
+                        try:
+                            rel_path = template.format(**vars_map_for_path)
+                        except Exception as e:
+                            raise RuntimeError(f"命名模板解析失败: {e}")
+
+                        # 把路径里的每一段都 sanitize 一下
+                        rel_parts = []
+                        for part in re.split(r"[\\/]+", rel_path):
+                            if part:
+                                rel_parts.append(safe_segment(part))
+
+                        rel_path_clean = os.path.join(*rel_parts) if rel_parts else original_basename
+
+                        # 如果模板里没有扩展名，就保留原始扩展名
+                        if not os.path.splitext(rel_path_clean)[1] and ext:
+                            rel_path_clean = f"{rel_path_clean}.{ext}"
+
+                        # 为同一场景的多个文件添加区分后缀（仅在 multi_file_mode 为 "all" 时）
+                        rel_path_clean = apply_multi_file_suffix(rel_path_clean, scene, file_obj, settings)
+
+                        abs_target = os.path.join(target_root, rel_path_clean)
+                        return abs_target
+                else:
+                    # 如果源目录或目标目录为空，抛出错误
+                    raise RuntimeError("源目录或目标目录不能为空")
+            else:
+                # 如果格式不正确，抛出错误
+                raise RuntimeError("源目录到目标目录的映射格式错误，应为 '源目录->目标目录'")
+        else:
+            # 如果格式不正确，抛出错误
+            raise RuntimeError("源目录到目标目录的映射格式错误，应为 '源目录->目标目录'")
+    else:
+        # 如果没有设置映射，使用原有逻辑
+        target_root = settings["target_root"].strip()
+        template = settings["filename_template"].strip()
+
+        if not target_root:
+            raise RuntimeError("目标目录(target_root)未配置")
+
+        vars_map = build_template_vars(scene, file_path, file_obj)
+        original_basename = vars_map["original_basename"]
+        ext = vars_map["ext"]
+
+        # 避免变量中出现路径分隔符导致被当成子目录
+        vars_map_for_path = dict(vars_map)
+        for k, v in vars_map_for_path.items():
+            if isinstance(v, str):
+                vars_map_for_path[k] = v.replace("\\", "_").replace("/", "_")
+
+        # 先做模板替换
+        try:
+            rel_path = template.format(**vars_map_for_path)
+        except Exception as e:
+            raise RuntimeError(f"命名模板解析失败: {e}")
+
+        # 把路径里的每一段都 sanitize 一下
+        rel_parts = []
+        for part in re.split(r"[\\/]+", rel_path):
+            if part:
+                rel_parts.append(safe_segment(part))
+
+        rel_path_clean = os.path.join(*rel_parts) if rel_parts else original_basename
+
+        # 如果模板里没有扩展名，就保留原始扩展名
+        if not os.path.splitext(rel_path_clean)[1] and ext:
+            rel_path_clean = f"{rel_path_clean}.{ext}"
+
+        # 为同一场景的多个文件添加区分后缀（仅在 multi_file_mode 为 "all" 时）
+        rel_path_clean = apply_multi_file_suffix(rel_path_clean, scene, file_obj, settings)
+
+        abs_target = os.path.join(target_root, rel_path_clean)
+        return abs_target
+
+
+def move_file_with_graphql(stash: StashInterface, file_id: str, dest_folder: str, dest_basename: str) -> bool:
+    """使用GraphQL API移动文件"""
+    mutation = """
+        mutation MoveFiles($input: MoveFilesInput!) {
+            moveFiles(input: $input)
+        }
+    """
+    variables = {
+        "input": {
+            "ids": [file_id],
+            "destination_folder": dest_folder,
+            "destination_basename": dest_basename
+        }
+    }
+
     try:
-        rel_path = template.format(**vars_map_for_path)
+        result = stash.call_GQL(mutation, variables)
+        success = result.get("moveFiles", False)
+        return success
     except Exception as e:
-        raise RuntimeError(f"命名模板解析失败: {e}")
-
-    # 把路径里的每一段都 sanitize 一下
-    rel_parts = []
-    for part in re.split(r"[\\/]+", rel_path):
-        if part:
-            rel_parts.append(safe_segment(part))
-
-    rel_path_clean = os.path.join(*rel_parts) if rel_parts else original_basename
-
-    # 如果模板里没有扩展名，就保留原始扩展名
-    if not os.path.splitext(rel_path_clean)[1] and ext:
-        rel_path_clean = f"{rel_path_clean}.{ext}"
-
-    abs_target = os.path.join(target_root, rel_path_clean)
-    return abs_target
+        log.error(f"GraphQL moveFiles调用失败: {e}")
+        return False
 
 
-def move_file(scene: Dict[str, Any], file_obj: Dict[str, Any], settings: Dict[str, Any]) -> bool:
-    """执行单个文件的移动操作。返回是否真的移动了。"""
+def move_file_with_suffix_handling(scene: Dict[str, Any], file_obj: Dict[str, Any], settings: Dict[str, Any], used_paths: set, file_idx: int) -> bool:
+    """执行单个文件的移动操作，处理路径冲突。返回是否真的移动了。"""
     src = file_obj.get("path")
+    file_id = file_obj.get("id")
+
     if not src:
         log.warning(f"File with id={file_obj.get('id')} has no path, skip")
+        return False
+
+    if not file_id:
+        log.warning(f"File with path={src} has no id, skip")
         return False
 
     try:
@@ -475,33 +708,80 @@ def move_file(scene: Dict[str, Any], file_obj: Dict[str, Any], settings: Dict[st
         log.error(f"构建目标路径失败: {e}")
         return False
 
-    # if src == dst:
-    #     log.info(f"源路径和目标路径相同，跳过: {src}")
-    #     return False
-    #
-    # if not os.path.exists(src):
-    #     log.warning(f"源文件不存在，跳过: {src}")
-    #     return False
-    #
-    # if os.path.exists(dst):
-    #     log.warning(f"目标文件已存在，跳过: {dst}")
-    #     return False
-
     dst_dir = os.path.dirname(dst)
+    dst_basename = os.path.basename(dst)
+
+    # 检查路径冲突，如果存在则添加后缀
+    original_dst_basename, dst_ext = os.path.splitext(dst_basename)
+    counter = 1
+    final_dst_basename = dst_basename
+
+    while final_dst_basename in used_paths:
+        # 添加序号后缀，如 (2), (3), 等
+        final_dst_basename = f"{original_dst_basename} ({counter + 1}){dst_ext}"
+        counter += 1
+
+    # 添加到已使用路径集合
+    used_paths.add(final_dst_basename)
+
+    # 记录原始目录，用于后续清理空目录
+    original_dir = os.path.dirname(src)
+
     try:
         if not settings.get("dry_run"):
+            # 使用GraphQL API移动文件，这样Stash会自动更新数据库
+            success = move_file_with_graphql(settings.get("stash_interface"), file_id, dst_dir, final_dst_basename)
+            if not success:
+                log.error(f"GraphQL moveFiles failed for file id={file_id}")
+                # 从已使用路径集合中移除，因为移动失败
+                used_paths.discard(final_dst_basename)
+                return False
+        else:
+            # dry_run模式下创建目标目录
             os.makedirs(dst_dir, exist_ok=True)
-            # 使用 move 确保跨设备也能工作（Python 会自动选择 copy+remove）
-            shutil.move(src, dst)
+
+        # 执行后处理（如移动字幕、生成NFO等）
+        # 使用最终的目标路径
+        final_dst = os.path.join(dst_dir, final_dst_basename)
         try:
-            post_process_moved_file(src, dst, scene, settings)
+            # 在dry_run模式下，我们使用原始路径作为源路径，目标路径作为目标路径
+            # 在非dry_run模式下，文件已经被GraphQL移动，但我们仍需执行后处理
+            post_process_moved_file(src, final_dst, scene, settings)
         except Exception as post_e:
-            log.error(f"移动后处理失败 '{dst}': {post_e}")
-        log.info(f"Moved file: '{src}' -> '{dst}' (dry_run={settings.get('dry_run')})")
+            log.error(f"移动后处理失败 '{final_dst}': {post_e}")
+
+        # 清理原来的空目录
+        if not settings.get("dry_run"):
+            # 获取配置来确定基础路径（目标目录或映射的目标目录）
+            source_target_mapping = settings.get("source_target_mapping", "").strip()
+            base_path = ""
+            
+            if source_target_mapping and '->' in source_target_mapping:
+                # 有映射：使用映射的目标目录
+                parts = source_target_mapping.split('->', 1)
+                if len(parts) == 2:
+                    base_path = parts[1].strip()
+            else:
+                # 无映射：使用目标根目录
+                base_path = settings.get("target_root", "").strip()
+            
+            if base_path:
+                remove_empty_parent_dirs(original_dir, base_path)
+
+        log.info(f"Moved file: '{src}' -> '{final_dst}' (dry_run={settings.get('dry_run')})")
         return True
     except Exception as e:
-        log.error(f"移动文件失败 '{src}' -> '{dst}': {e}")
+        log.error(f"移动文件失败 '{src}' -> '{final_dst}': {e}")
+        # 从已使用路径集合中移除，因为移动失败
+        used_paths.discard(final_dst_basename)
         return False
+
+
+def move_file(scene: Dict[str, Any], file_obj: Dict[str, Any], settings: Dict[str, Any]) -> bool:
+    """执行单个文件的移动操作。返回是否真的移动了。"""
+    # 为了向后兼容，创建一个临时的used_paths集合
+    used_paths = set()
+    return move_file_with_suffix_handling(scene, file_obj, settings, used_paths, 0)
 
 
 def process_scene(scene: Dict[str, Any], settings: Dict[str, Any]) -> int:
@@ -520,7 +800,26 @@ def process_scene(scene: Dict[str, Any], settings: Dict[str, Any]) -> int:
         log.info(f"Scene {scene_id} has no files, skip")
         return 0
 
+    # 多文件模式处理
+    multi_file_mode = settings.get("multi_file_mode", "all")
+
+    if len(files) > 1:
+        if multi_file_mode == "skip":
+            log.info(f"Scene {scene_id} has {len(files)} files, skipping due to multi_file_mode=skip")
+            return 0
+        elif multi_file_mode == "primary_only":
+            log.debug(f"Scene {scene_id} has {len(files)} files, processing only primary file")
+            files_to_process = [files[0]]
+        else:  # "all" mode - process all files
+            log.debug(f"Scene {scene_id} has {len(files)} files, processing all")
+            files_to_process = files
+    else:
+        files_to_process = files
+
     moved_count = 0
+
+    # 跟踪已使用的路径，用于处理冲突
+    used_paths = set()
 
     def _is_file_organized(file_obj: Dict[str, Any]) -> bool:
         if not settings.get("move_only_organized"):
@@ -530,18 +829,19 @@ def process_scene(scene: Dict[str, Any], settings: Dict[str, Any]) -> int:
             return bool(scene.get("organized"))
         return False
 
-    for f in files:
+    for idx, f in enumerate(files_to_process):
         if not _is_file_organized(f):
             continue
 
-        if move_file(scene, f, settings):
+        # 调用move_file_with_suffix_handling来处理路径冲突
+        if move_file_with_suffix_handling(scene, f, settings, used_paths, idx):
             moved_count += 1
 
     log.info(f"Scene {scene_id}: moved {moved_count} files")
     return moved_count
 
 
-def get_all_scenes(stash: StashInterface, per_page: int = 1000) -> List[Dict[str, Any]]:
+def get_all_scenes(stash: StashInterface, settings: Dict[str, Any], per_page: int = 1000) -> List[Dict[str, Any]]:
     """
     使用 stash.find_scenes 分页把所有 scenes 一次性拉成一个 list 返回，
     方便在 IDE 里直接看变量调试。
@@ -565,7 +865,7 @@ def get_all_scenes(stash: StashInterface, per_page: int = 1000) -> List[Dict[str
         resume_time
         play_duration
         play_count
-        
+
         files {
           id
           path
@@ -583,7 +883,7 @@ def get_all_scenes(stash: StashInterface, per_page: int = 1000) -> List[Dict[str
             value
           }
         }
-        
+
         paths {
           screenshot
           preview
@@ -595,7 +895,7 @@ def get_all_scenes(stash: StashInterface, per_page: int = 1000) -> List[Dict[str
           interactive_heatmap
           caption
         }
-        
+
         scene_markers {
           id
           title
@@ -605,7 +905,7 @@ def get_all_scenes(stash: StashInterface, per_page: int = 1000) -> List[Dict[str
             name
           }
         }
-        
+
         galleries {
           id
           files {
@@ -616,13 +916,13 @@ def get_all_scenes(stash: StashInterface, per_page: int = 1000) -> List[Dict[str
           }
           title
         }
-        
+
         studio {
           id
           name
           image_path
         }
-        
+
         groups {
           group {
             id
@@ -631,12 +931,12 @@ def get_all_scenes(stash: StashInterface, per_page: int = 1000) -> List[Dict[str
           }
           scene_index
         }
-        
+
         tags {
           id
           name
         }
-        
+
         performers {
           id
           name
@@ -652,7 +952,7 @@ def get_all_scenes(stash: StashInterface, per_page: int = 1000) -> List[Dict[str
           measurements
           fake_tits
         }
-        
+
         stash_ids {
           endpoint
           stash_id
@@ -660,11 +960,49 @@ def get_all_scenes(stash: StashInterface, per_page: int = 1000) -> List[Dict[str
         }
     """
 
+    # 检查是否设置了源目录映射
+    source_target_mapping = settings.get("source_target_mapping", "").strip()
+    query_f = None
+
+    if source_target_mapping and '->' in source_target_mapping:
+        # 有映射：筛选源路径下的文件
+        parts = source_target_mapping.split('->', 1)
+        if len(parts) == 2:
+            source_base_dir = parts[0].strip()
+            if source_base_dir:
+                # 使用正则表达式筛选源路径下的文件
+                # 转义路径中的特殊字符
+                escaped_path = source_base_dir.replace('\\', '\\\\').replace('.', '\\.').replace('[', '\\[').replace(']', '\\]')
+                query_f = {
+                    "path": {
+                        "modifier": "MATCHES_REGEX",
+                        "value": f"^{escaped_path}.*"
+                    }
+                }
+    else:
+        # 没有映射：筛选不在目标路径的文件
+        target_root = settings.get("target_root", "").strip()
+        if target_root:
+            # 使用正则表达式筛选不在目标路径的文件
+            escaped_target = target_root.replace('\\', '\\\\').replace('.', '\\.').replace('[', '\\[').replace(']', '\\]')
+            query_f = {
+                "path": {
+                    "modifier": "NOT_MATCHES_REGEX",
+                    "value": f"^{escaped_target}.*"
+                }
+            }
+
+    # 构建查询过滤条件
+    query_filter = {"page": page, "per_page": per_page}
+
     while True:
         log.info(f"[{PLUGIN_ID}] Fetching scenes page={page}, per_page={per_page}")
+        if query_f:
+            log.info(f"[{PLUGIN_ID}] Using path filter: {query_f}")
+
         page_scenes = stash.find_scenes(
-            f=None,
-            filter={"page": page, "per_page": per_page},
+            f=query_f,  # 使用f参数传递过滤条件
+            filter=query_filter,
             fragment=fragment,
         )
 
@@ -675,10 +1013,318 @@ def get_all_scenes(stash: StashInterface, per_page: int = 1000) -> List[Dict[str
 
         log.info(f"[{PLUGIN_ID}] Got {len(page_scenes)} scenes in page={page}")
         all_scenes.extend(page_scenes)
+
+        # 更新页码和过滤器（除了第一页，后续页码需要更新）
         page += 1
+        query_filter["page"] = page
 
     log.info(f"[{PLUGIN_ID}] Total scenes fetched: {len(all_scenes)}")
     return all_scenes
+
+
+def should_regenerate_metadata(file_path: str, scene: Dict[str, Any], file_obj: Dict[str, Any], settings: Dict[str, Any]) -> bool:
+    """
+    检查是否需要重新生成元数据（NFO和封面）
+    对于已经在目标路径的文件，总是需要重新生成元数据和封面
+    """
+    # 对于已经在目标路径的文件，总是需要重新生成元数据和封面
+    return True
+
+
+def is_file_in_target_location(file_path: str, scene: Dict[str, Any], file_obj: Dict[str, Any], settings: Dict[str, Any]) -> bool:
+    """
+    检查文件是否在目标目录树下（包括子目录）
+    """
+    try:
+        # 获取目标根目录
+        # 如果有映射，使用映射的目标目录；否则使用 target_root
+        source_target_mapping = settings.get("source_target_mapping", "").strip()
+        target_root = ""
+        
+        if source_target_mapping and '->' in source_target_mapping:
+            # 有映射：使用映射的目标目录
+            parts = source_target_mapping.split('->', 1)
+            if len(parts) == 2:
+                target_root = parts[1].strip()
+        else:
+            # 无映射：使用 target_root
+            target_root = settings.get("target_root", "").strip()
+        
+        if not target_root:
+            return False
+        
+        # 规范化路径
+        normalized_current = os.path.normpath(file_path)
+        normalized_target_root = os.path.normpath(target_root)
+        
+        # 检查当前路径是否在目标根目录下
+        return normalized_current.startswith(normalized_target_root + os.sep) or normalized_current == normalized_target_root
+    except Exception:
+        # 如果计算失败，假设不在目标位置
+        return False
+
+
+def build_target_path_for_existing_file(file_path: str, scene: Dict[str, Any], file_obj: Dict[str, Any], settings: Dict[str, Any]) -> str:
+    """
+    为已存在于目标目录的文件构建目标路径，保留目标路径下的一级子目录
+    """
+    try:
+        # 获取源目录到目标目录的映射设置
+        source_target_mapping = settings.get("source_target_mapping", "").strip()
+
+        if source_target_mapping and '->' in source_target_mapping:
+            # 有映射：使用映射逻辑，保留目标路径下的一级子目录
+            parts = source_target_mapping.split('->', 1)
+            if len(parts) == 2:
+                target_base_dir = parts[1].strip()
+
+                if target_base_dir:
+                    # 获取当前文件在目标目录下的一级子目录
+                    normalized_target_base = os.path.normpath(target_base_dir)
+                    normalized_file_path = os.path.normpath(file_path)
+
+                    # 检查文件是否在目标目录下
+                    if normalized_file_path.startswith(normalized_target_base + os.sep):
+                        # 计算相对于目标基础目录的路径，获取第一级子目录
+                        rel_path_from_base = os.path.relpath(file_path, normalized_target_base)
+                        rel_parts = rel_path_from_base.split(os.sep)
+                        first_level_dir = rel_parts[0] if rel_parts and rel_parts[0] else ""
+
+                        # 使用模板生成文件名部分（不包含路径）
+                        template = settings["filename_template"].strip()
+                        vars_map = build_template_vars(scene, file_path, file_obj)
+                        original_basename = vars_map["original_basename"]
+                        ext = vars_map["ext"]
+
+                        # 避免变量中出现路径分隔符导致被当成子目录
+                        vars_map_for_path = dict(vars_map)
+                        for k, v in vars_map_for_path.items():
+                            if isinstance(v, str):
+                                vars_map_for_path[k] = v.replace("\\", "_").replace("/", "_")
+
+                        # 先做模板替换
+                        try:
+                            filename_part = template.format(**vars_map_for_path)
+                        except Exception as e:
+                            raise RuntimeError(f"命名模板解析失败: {e}")
+
+                        # 把路径里的每一段都 sanitize 一下
+                        filename_parts = []
+                        for part in re.split(r"[\\/]+", filename_part):
+                            if part:
+                                filename_parts.append(safe_segment(part))
+
+                        filename_clean = os.path.join(*filename_parts) if filename_parts else original_basename
+
+                        # 如果模板里没有扩展名，就保留原始扩展名
+                        if not os.path.splitext(filename_clean)[1] and ext:
+                            filename_clean = f"{filename_clean}.{ext}"
+
+                        # 为同一场景的多个文件添加区分后缀（仅在 multi_file_mode 为 "all" 时）
+                        filename_clean = apply_multi_file_suffix(filename_clean, scene, file_obj, settings)
+
+                        # 组合最终路径：目标基础目录 + 第一级子目录 + 文件名
+                        abs_target = os.path.join(target_base_dir, first_level_dir, filename_clean)
+                        return os.path.normpath(abs_target)
+                    else:
+                        # 如果文件不在目标目录下，这可能是因为：
+                        # 1. 这是同一场景的另一个文件，位于源目录
+                        # 2. 我们需要使用标准的路径构建逻辑来处理这种情况
+                        # 使用build_target_path函数来处理这种情况
+                        # 但现在build_target_path已经可以处理文件在源目录或目标目录的情况
+                        return build_target_path(scene, file_path, file_obj, settings)
+                else:
+                    raise RuntimeError("目标目录不能为空")
+            else:
+                raise RuntimeError("源目录到目标目录的映射格式错误，应为 '源目录->目标目录'")
+        else:
+            # 无映射：使用 target_root
+            target_root = settings.get("target_root", "").strip()
+
+        if not target_root:
+            raise RuntimeError("目标目录未配置")
+
+        # 使用目标根目录和模板来计算路径（普通逻辑）
+        template = settings["filename_template"].strip()
+        vars_map = build_template_vars(scene, file_path, file_obj)
+        original_basename = vars_map["original_basename"]
+        ext = vars_map["ext"]
+
+        # 避免变量中出现路径分隔符导致被当成子目录
+        vars_map_for_path = dict(vars_map)
+        for k, v in vars_map_for_path.items():
+            if isinstance(v, str):
+                vars_map_for_path[k] = v.replace("\\", "_").replace("/", "_")
+
+        # 先做模板替换
+        try:
+            rel_path = template.format(**vars_map_for_path)
+        except Exception as e:
+            raise RuntimeError(f"命名模板解析失败: {e}")
+
+        # 把路径里的每一段都 sanitize 一下
+        rel_parts = []
+        for part in re.split(r"[\\/]+", rel_path):
+            if part:
+                rel_parts.append(safe_segment(part))
+
+        rel_path_clean = os.path.join(*rel_parts) if rel_parts else original_basename
+
+        # 如果模板里没有扩展名，就保留原始扩展名
+        if not os.path.splitext(rel_path_clean)[1] and ext:
+            rel_path_clean = f"{rel_path_clean}.{ext}"
+
+        # 为同一场景的多个文件添加区分后缀（仅在 multi_file_mode 为 "all" 时）
+        rel_path_clean = apply_multi_file_suffix(rel_path_clean, scene, file_obj, settings)
+
+        abs_target = os.path.join(target_root, rel_path_clean)
+        return abs_target
+    except Exception as e:
+        raise RuntimeError(f"计算目标路径失败: {e}")
+
+
+def remove_old_metadata(file_path: str, settings: Dict[str, Any]) -> None:
+    """
+    删除旧的NFO和封面文件
+    """
+    try:
+        # 删除NFO文件
+        nfo_path = os.path.splitext(file_path)[0] + ".nfo"
+        if os.path.exists(nfo_path):
+            if not settings.get("dry_run"):
+                os.remove(nfo_path)
+                log.info(f"Removed old NFO file: {nfo_path}")
+            else:
+                log.info(f"[dry_run] Would remove old NFO file: {nfo_path}")
+        
+        # 删除封面文件
+        video_dir = os.path.dirname(file_path)
+        base_name = os.path.splitext(os.path.basename(file_path))[0]
+        exts = (".jpg", ".jpeg", ".png", ".webp", ".gif")
+        
+        for ext in exts:
+            poster_candidate = os.path.join(video_dir, f"{base_name}-poster{ext}")
+            if os.path.exists(poster_candidate):
+                if not settings.get("dry_run"):
+                    os.remove(poster_candidate)
+                    log.info(f"Removed old poster file: {poster_candidate}")
+                else:
+                    log.info(f"[dry_run] Would remove old poster file: {poster_candidate}")
+    except Exception as e:
+        log.error(f"Error removing old metadata for {file_path}: {e}")
+
+
+def remove_empty_parent_dirs(directory: str, base_path: str) -> None:
+    """
+    递归删除空的父目录，但不超过base_path
+    """
+    try:
+        # 规范化路径
+        dir_path = os.path.normpath(directory)
+        base_path = os.path.normpath(base_path)
+        
+        # 从当前目录向上遍历
+        while dir_path != base_path and os.path.dirname(dir_path) != dir_path:
+            if os.path.isdir(dir_path):
+                try:
+                    # 检查目录是否为空
+                    if not os.listdir(dir_path):
+                        os.rmdir(dir_path)
+                        log.info(f"Removed empty directory: {dir_path}")
+                        # 继续向上检查父目录
+                        dir_path = os.path.dirname(dir_path)
+                    else:
+                        # 如果目录不为空，停止向上删除
+                        break
+                except OSError as e:
+                    log.warning(f"Could not remove directory {dir_path}: {e}")
+                    break
+            else:
+                # 如果路径不存在，向上移动
+                dir_path = os.path.dirname(dir_path)
+    except Exception as e:
+        log.error(f"Error removing empty parent directories: {e}")
+
+
+def regenerate_file_at_target(file_obj: Dict[str, Any], scene: Dict[str, Any], settings: Dict[str, Any]) -> bool:
+    """
+    重新生成文件到目标位置（重新命名、生成NFO和封面）
+    """
+    try:
+        file_path = file_obj.get("path", "")
+        file_id = file_obj.get("id", "")
+
+        if not file_path or not file_id:
+            return False
+
+        # 记录原始目录，用于后续清理空目录
+        original_dir = os.path.dirname(file_path)
+
+        # 计算新的目标路径
+        # 对于已经在目标目录的文件，使用专门的函数来保留原始映射关系
+        new_target_path = build_target_path_for_existing_file(file_path, scene, file_obj, settings)
+
+        new_target_dir = os.path.dirname(new_target_path)
+        new_target_basename = os.path.basename(new_target_path)
+
+        # 使用GraphQL API移动文件到新位置
+        if not settings.get("dry_run"):
+            success = move_file_with_graphql(settings.get("stash_interface"), file_id, new_target_dir, new_target_basename)
+            if not success:
+                log.error(f"GraphQL moveFiles failed for file id={file_id}")
+                return False
+        else:
+            # dry_run模式下创建目标目录
+            os.makedirs(new_target_dir, exist_ok=True)
+            log.info(f"[dry_run] Would move file: '{file_path}' -> '{new_target_path}'")
+
+        # 执行后处理（生成新的NFO和封面）
+        post_process_moved_file(file_path, new_target_path, scene, settings)
+
+        # 清理原来的空目录
+        if not settings.get("dry_run"):
+            # 获取配置来确定基础路径（目标目录或映射的目标目录）
+            source_target_mapping = settings.get("source_target_mapping", "").strip()
+            base_path = ""
+            
+            if source_target_mapping and '->' in source_target_mapping:
+                # 有映射：使用映射的目标目录
+                parts = source_target_mapping.split('->', 1)
+                if len(parts) == 2:
+                    base_path = parts[1].strip()
+            else:
+                # 无映射：使用目标根目录
+                base_path = settings.get("target_root", "").strip()
+            
+            if base_path:
+                remove_empty_parent_dirs(original_dir, base_path)
+
+        log.info(f"Regenerated file at new location: '{file_path}' -> '{new_target_path}'")
+        return True
+    except Exception as e:
+        log.error(f"Error regenerating file {file_obj.get('path', '')}: {e}")
+        return False
+
+
+def regenerate_metadata_only(file_path: str, scene: Dict[str, Any], settings: Dict[str, Any]) -> bool:
+    """
+    仅重新生成元数据（NFO和封面），不移动文件
+    """
+    try:
+        if not settings.get("dry_run"):
+            # 重新生成NFO和封面到当前位置
+            post_process_moved_file(file_path, file_path, scene, settings)
+            log.info(f"Regenerated metadata for file at same location: '{file_path}'")
+        else:
+            log.info(f"[dry_run] Would regenerate metadata for file at same location: '{file_path}'")
+            # 在dry_run模式下也调用，以便显示将要执行的操作
+            post_process_moved_file(file_path, file_path, scene, settings)
+
+        return True
+    except Exception as e:
+        log.error(f"Error regenerating metadata for {file_path}: {e}")
+        return False
+
 
 
 def _build_requests_session(settings: Dict[str, Any]) -> requests.Session:
@@ -1025,7 +1671,7 @@ def download_scene_art(video_path: str, scene: Dict[str, Any], settings: Dict[st
             log.info(f"Poster already exists, skip: {candidate}")
             return
 
-    # 如果没有匹配的 -poster 文件，但目录里存在“旧命名”的 -poster 文件，尝试重命名为新前缀
+    # 如果没有匹配的 -poster 文件，但目录里存在"旧命名"的 -poster 文件，尝试重命名为新前缀
     # existing_posters = []
     # try:
     #     for name in os.listdir(video_dir):
@@ -1228,10 +1874,6 @@ def overlay_studio_logo_on_poster(poster_base: str, scene: Dict[str, Any], setti
         log.error("Logo 图片尺寸异常，跳过叠加")
         return
 
-    if poster_img.width <= 0 or poster_img.height <= 0:
-        log.error("Poster 图片尺寸异常，跳过叠加")
-        return
-
     # 控制 logo 大小：不超过 poster 高度的一定比例，按高度等比缩放宽度；
     # 同时增加横向限制：宽度最多为 poster 宽度的 50%
     target_height = int(poster_img.height * max_ratio)
@@ -1302,127 +1944,8 @@ def overlay_studio_logo_on_poster(poster_base: str, scene: Dict[str, Any], setti
         log.error(f"清理厂商 logo 缓存文件时出错: {e}")
 
 
-def write_actor_nfo(actor_dir: str, performer: Dict[str, Any], settings: Dict[str, Any]) -> None:
-    """
-    为单个演员生成/覆盖 actor.nfo 文件，写入基本信息。
-    结构示例：
-      <person>
-        <name>Actor Name</name>
-        <gender>female</gender>
-        <country>US</country>
-        <birthdate>1990-01-01</birthdate>
-        <height_cm>170</height_cm>
-        <measurements>90-60-90</measurements>
-        <fake_tits>true</fake_tits>
-        <disambiguation>...</disambiguation>
-      </person>
-    """
-    if not settings.get("export_actor_nfo", True):
-        return
-
-    name = performer.get("name")
-    if not name:
-        return
-
-    root = ET.Element("person")
-
-    def _set(tag: str, value: Any) -> None:
-        if value is None:
-            return
-        text = str(value).strip()
-        if not text:
-            return
-        el = ET.SubElement(root, tag)
-        el.text = text
-
-    _set("name", name)
-    _set("gender", performer.get("gender"))
-    _set("country", performer.get("country"))
-    _set("birthdate", performer.get("birthdate"))
-    _set("height_cm", performer.get("height_cm"))
-    _set("measurements", performer.get("measurements"))
-    _set("fake_tits", performer.get("fake_tits"))
-    _set("disambiguation", performer.get("disambiguation"))
-
-    nfo_path = os.path.join(actor_dir, "actor.nfo")
-
-    if settings.get("dry_run"):
-        try:
-            xml_str = ET.tostring(root, encoding="unicode")
-        except Exception:
-            xml_str = "<person>...</person>"
-        log.info(f"[dry_run] Would write actor NFO for '{name}' -> {nfo_path}")
-        log.info(xml_str)
-        return
-
-    try:
-        os.makedirs(actor_dir, exist_ok=True)
-        tree = ET.ElementTree(root)
-        tree.write(nfo_path, encoding="utf-8", xml_declaration=True)
-        log.info(f"Wrote actor NFO for '{name}' -> {nfo_path}")
-    except Exception as e:
-        log.error(f"写入演员 NFO 失败 '{nfo_path}': {e}")
 
 
-def download_actor_images(scene: Dict[str, Any], settings: Dict[str, Any]) -> None:
-    """
-    把演员图片和信息导出到 {target_root}/actors/目录。
-    结构示例：
-      {target_root}/actors/演员名/actor.nfo
-      {target_root}/actors/演员名/folder.jpg
-    """
-    if not settings.get("download_actor_images", True) and not settings.get("export_actor_nfo", True):
-        return
-
-    performers = scene.get("performers") or []
-    if not performers:
-        return
-
-    target_root = settings.get("target_root", "").strip()
-    if not target_root:
-        log.warning("target_root 未配置，无法保存演员图片")
-        return
-
-    actors_root = os.path.join(target_root, "actors")
-    dry_run = bool(settings.get("dry_run"))
-    if not dry_run:
-        os.makedirs(actors_root, exist_ok=True)
-
-    seen_names = set()
-
-    for p in performers:
-        if not isinstance(p, dict):
-            continue
-        name = p.get("name")
-        if not name:
-            continue
-
-        # 以清洗过的名字作为子目录，避免同一演员在同一场景被处理多次
-        safe_name = safe_segment(name)
-        if safe_name in seen_names:
-            continue
-        seen_names.add(safe_name)
-
-        actor_dir = os.path.join(actors_root, safe_name)
-        if not dry_run:
-            os.makedirs(actor_dir, exist_ok=True)
-
-        # 1) 下载演员图片 -> folder.jpg（保持 jpg 扩展名，避免影响 Emby/导入脚本的兼容性）
-        image_url = p.get("image_path")
-        if settings.get("download_actor_images", True) and image_url:
-            dst_path = os.path.join(actor_dir, "folder.jpg")
-            abs_url = build_absolute_url(image_url, settings)
-
-            if dry_run:
-                log.info(f"[dry_run] Would download actor image: '{abs_url}' -> '{dst_path}'")
-            else:
-                if os.path.exists(dst_path):
-                    log.info(f"Actor image already exists, skip: {dst_path}")
-                else:
-                    _download_binary(abs_url, dst_path, settings, detect_ext=False)
-
-        # 2) 生成演员 NFO
-        write_actor_nfo(actor_dir, p, settings)
 
 
 def move_related_subtitle_files(
@@ -1517,14 +2040,12 @@ def post_process_moved_file(
     1. 移动并重命名同名字幕文件
     2. 写 NFO
     3. 下载场景封面图到视频目录（folder.jpg）
-    4. 下载演员头像并生成演员 NFO 到 {target_root}/actors/
     """
     move_related_subtitle_files(src_video_path, dst_video_path, settings)
 
     # 后续处理都基于新视频路径
     write_nfo_for_scene(dst_video_path, scene, settings)
     download_scene_art(dst_video_path, scene, settings)
-    download_actor_images(scene, settings)
 
 
 def handle_hook_or_task(stash: StashInterface, args: Dict[str, Any], settings: Dict[str, Any]) -> str:
@@ -1537,19 +2058,22 @@ def handle_hook_or_task(stash: StashInterface, args: Dict[str, Any], settings: D
     mode = (args or {}).get("mode") or "all"
     dry_run = bool(settings.get("dry_run"))
 
+    # 添加stash接口到settings中，以便move_file函数可以使用
+    settings["stash_interface"] = stash
+
     # 1) Hook 场景：如果有 hookContext.id，就只处理这个 scene
     hook_ctx = (args or {}).get("hookContext") or {}
     scene_id = hook_ctx.get("id") or hook_ctx.get("scene_id")
 
     # 1) Hook 模式：只处理单个 scene（通常从 Scene.Update.Post 触发）
     if scene_id is not None:
-        # try:
-        #     with open(f"hook_ctx-{scene_id}.json", "w", encoding="utf-8") as f:
-        #         json.dump(hook_ctx, f, indent=2, ensure_ascii=False)
-        # except Exception:
-        #     pass
-        return f"Processed scene {scene_id}, Hook 场景保存日志直接返回"
-
+        # 检查是否启用了 Hook 模式
+        if not settings.get("enable_hook_mode", True):  # 默认启用，除非显式禁用
+            msg = f"Hook mode disabled, skipping scene {scene_id}"
+            log.info(msg)
+            task_log(msg, progress=1.0)
+            return msg
+        
         scene_id = int(scene_id)
         log.info(f"[{PLUGIN_ID}] Hook mode, processing single scene id={scene_id}")
 
@@ -1558,10 +2082,27 @@ def handle_hook_or_task(stash: StashInterface, args: Dict[str, Any], settings: D
             id
             organized
             title
+            code
+            details
+            director
             date
-            studio { name }
-            performers { name id image_path gender country birthdate height_cm measurements fake_tits disambiguation }
-            files { id path }
+            rating100
+            studio { id name image_path }
+            performers { id name disambiguation gender birthdate country eye_color height_cm measurements fake_tits }
+            tags { id name }
+            groups { group { id name } }
+            files { id path width height }
+            paths {
+              screenshot
+              preview
+              stream
+              webp
+              vtt
+              sprite
+              funscript
+              interactive_heatmap
+              caption
+            }
         """)
 
         if not scene:
@@ -1575,8 +2116,101 @@ def handle_hook_or_task(stash: StashInterface, args: Dict[str, Any], settings: D
             task_log(msg, progress=1.0)
             return msg
 
-        moved = process_scene(scene, settings)
-        msg = f"Processed scene {scene_id}, moved {moved} file(s), dry_run={dry_run}"
+        # 获取配置
+        source_target_mapping = settings.get("source_target_mapping", "").strip()
+        target_root = settings.get("target_root", "").strip()
+        
+        # 检查场景中是否有文件在源目录（有映射时）或不在目标目录（无映射时）
+        files_needing_processing = []
+        files_already_in_target = []
+
+        for file_obj in scene.get("files", []):
+            file_path = file_obj.get("path", "")
+            if not file_path:
+                continue
+
+            if source_target_mapping and '->' in source_target_mapping:
+                # 有映射：检查文件是否在源目录或目标目录
+                parts = source_target_mapping.split('->', 1)
+                if len(parts) == 2:
+                    source_base_dir = parts[0].strip()
+                    target_base_dir = parts[1].strip()
+                    if source_base_dir and target_base_dir:
+                        normalized_source_base = os.path.normpath(source_base_dir)
+                        normalized_target_base = os.path.normpath(target_base_dir)
+                        normalized_file_path = os.path.normpath(file_path)
+
+                        # 检查文件是否在源目录
+                        if normalized_file_path.startswith(normalized_source_base + os.sep):
+                            files_needing_processing.append(file_obj)
+                        # 检查文件是否在目标目录
+                        elif normalized_file_path.startswith(normalized_target_base + os.sep):
+                            files_already_in_target.append(file_obj)
+                        else:
+                            # 文件既不在源目录也不在目标目录，跳过处理
+                            log.info(f"File '{file_path}' is neither in source nor in target directory, skipping.")
+            else:
+                # 无映射：检查文件是否不在目标目录
+                if target_root and not is_file_in_target_location(file_path, scene, file_obj, settings):
+                    files_needing_processing.append(file_obj)
+                else:
+                    files_already_in_target.append(file_obj)
+
+        # 处理需要移动的文件（在源目录或不在目标目录）
+        moved_count = 0
+        if files_needing_processing:
+            # 创建临时场景，只包含需要处理的文件
+            temp_scene = dict(scene)
+            temp_scene["files"] = files_needing_processing
+            moved_count = process_scene(temp_scene, settings)
+
+        # 处理已经在目标目录的文件（重新生成NFO和封面，如果命名规则参数变化则移动到新路径）
+        if files_already_in_target:
+            # 多文件模式处理
+            multi_file_mode = settings.get("multi_file_mode", "all")
+            
+            if len(files_already_in_target) > 1:
+                if multi_file_mode == "skip":
+                    log.info(f"Scene {scene_id} has {len(files_already_in_target)} files already in target directory, skipping due to multi_file_mode=skip")
+                    files_to_process = []
+                elif multi_file_mode == "primary_only":
+                    log.debug(f"Scene {scene_id} has {len(files_already_in_target)} files already in target directory, processing only primary file")
+                    files_to_process = [files_already_in_target[0]]
+                else:  # "all" mode - process all files
+                    log.debug(f"Scene {scene_id} has {len(files_already_in_target)} files already in target directory, processing all")
+                    files_to_process = files_already_in_target
+            else:
+                files_to_process = files_already_in_target
+
+            for file_obj in files_to_process:
+                file_path = file_obj.get("path", "")
+                if not file_path:
+                    continue
+
+                # 删除旧的NFO和封面
+                remove_old_metadata(file_path, settings)
+
+                # 检查是否需要移动到新路径（如果命名规则中的参数发生了变化）
+                # 对于已经在目标目录的文件，使用专门的函数计算目标路径
+                try:
+                    current_target_path = build_target_path_for_existing_file(file_path, scene, file_obj, settings)
+                    normalized_current = os.path.normpath(file_path)
+                    normalized_target = os.path.normpath(current_target_path)
+
+                    if normalized_current != normalized_target:
+                        # 需要移动到新路径
+                        new_moved = regenerate_file_at_target(file_obj, scene, settings)
+                        if new_moved:
+                            moved_count += 1
+                    else:
+                        # 不需要移动路径，只需重新生成元数据
+                        regenerate_metadata_only(file_path, scene, settings)
+                except Exception as e:
+                    log.error(f"Error checking if file needs to be moved: {e}")
+                    # 出错时，至少更新元数据
+                    regenerate_metadata_only(file_path, scene, settings)
+        
+        msg = f"Processed scene {scene_id}, moved {moved_count} file(s), dry_run={dry_run}"
         log.info(msg)
         task_log(msg, progress=1.0)
         return msg
@@ -1585,7 +2219,7 @@ def handle_hook_or_task(stash: StashInterface, args: Dict[str, Any], settings: D
     log.info(f"[{PLUGIN_ID}] Task mode '{mode}': scanning all scenes and moving organized=True ones")
     task_log(f"[Task] Scanning scenes (mode={mode}, dry_run={dry_run})", progress=0.0)
 
-    scenes = get_all_scenes(stash, per_page=int(settings.get("per_page", 1000)))
+    scenes = get_all_scenes(stash, settings, per_page=int(settings.get("per_page", 1000)))
     total_scenes = len(scenes)
     organized_scenes = 0
     total_moved = 0
