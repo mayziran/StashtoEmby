@@ -429,6 +429,44 @@ def build_template_vars(
     }
 
 
+def _apply_template_and_suffix(template: str, scene: Dict[str, Any], file_path: str, file_obj: Dict[str, Any], settings: Dict[str, Any]) -> str:
+    """
+    应用模板并添加后缀的辅助函数
+    """
+    vars_map = build_template_vars(scene, file_path, file_obj)
+    original_basename = vars_map["original_basename"]
+    ext = vars_map["ext"]
+
+    # 避免变量中出现路径分隔符导致被当成子目录
+    vars_map_for_path = dict(vars_map)
+    for k, v in vars_map_for_path.items():
+        if isinstance(v, str):
+            vars_map_for_path[k] = v.replace("\\", "_").replace("/", "_")
+
+    # 先做模板替换
+    try:
+        filename_part = template.format(**vars_map_for_path)
+    except Exception as e:
+        raise RuntimeError(f"命名模板解析失败: {e}")
+
+    # 把路径里的每一段都 sanitize 一下
+    filename_parts = []
+    for part in re.split(r"[\\/]+", filename_part):
+        if part:
+            filename_parts.append(safe_segment(part))
+
+    filename_clean = os.path.join(*filename_parts) if filename_parts else original_basename
+
+    # 如果模板里没有扩展名，就保留原始扩展名
+    if not os.path.splitext(filename_clean)[1] and ext:
+        filename_clean = f"{filename_clean}.{ext}"
+
+    # 为同一场景的多个文件添加区分后缀（仅在 multi_file_mode 为 "all" 时）
+    filename_clean = apply_multi_file_suffix(filename_clean, scene, file_obj, settings)
+
+    return filename_clean
+
+
 def build_target_path(
         scene: Dict[str, Any],
         file_path: str,
@@ -491,36 +529,9 @@ def build_target_path(
 
                         # 使用模板生成文件名部分
                         template = settings["filename_template"].strip()
-                        vars_map = build_template_vars(scene, file_path, file_obj)
-                        original_basename = vars_map["original_basename"]
-                        ext = vars_map["ext"]
-
-                        # 避免变量中出现路径分隔符导致被当成子目录
-                        vars_map_for_path = dict(vars_map)
-                        for k, v in vars_map_for_path.items():
-                            if isinstance(v, str):
-                                vars_map_for_path[k] = v.replace("\\", "_").replace("/", "_")
-
-                        # 先做模板替换
-                        try:
-                            filename_part = template.format(**vars_map_for_path)
-                        except Exception as e:
-                            raise RuntimeError(f"命名模板解析失败: {e}")
-
-                        # 把路径里的每一段都 sanitize 一下
-                        filename_parts = []
-                        for part in re.split(r"[\\/]+", filename_part):
-                            if part:
-                                filename_parts.append(safe_segment(part))
-
-                        filename_clean = os.path.join(*filename_parts) if filename_parts else original_basename
-
-                        # 如果模板里没有扩展名，就保留原始扩展名
-                        if not os.path.splitext(filename_clean)[1] and ext:
-                            filename_clean = f"{filename_clean}.{ext}"
-
-                        # 为同一场景的多个文件添加区分后缀（仅在 multi_file_mode 为 "all" 时）
-                        filename_clean = apply_multi_file_suffix(filename_clean, scene, file_obj, settings)
+                        
+                        # 应用模板并添加后缀
+                        filename_clean = _apply_template_and_suffix(template, scene, file_path, file_obj, settings)
 
                         # 组合最终路径：目标基础目录 + 第一级子目录 + 文件名
                         abs_target = os.path.join(target_base_dir, first_level_dir, filename_clean)
@@ -535,36 +546,9 @@ def build_target_path(
 
                         # 使用模板生成文件名部分
                         template = settings["filename_template"].strip()
-                        vars_map = build_template_vars(scene, file_path, file_obj)
-                        original_basename = vars_map["original_basename"]
-                        ext = vars_map["ext"]
-
-                        # 避免变量中出现路径分隔符导致被当成子目录
-                        vars_map_for_path = dict(vars_map)
-                        for k, v in vars_map_for_path.items():
-                            if isinstance(v, str):
-                                vars_map_for_path[k] = v.replace("\\", "_").replace("/", "_")
-
-                        # 先做模板替换
-                        try:
-                            filename_part = template.format(**vars_map_for_path)
-                        except Exception as e:
-                            raise RuntimeError(f"命名模板解析失败: {e}")
-
-                        # 把路径里的每一段都 sanitize 一下
-                        filename_parts = []
-                        for part in re.split(r"[\\/]+", filename_part):
-                            if part:
-                                filename_parts.append(safe_segment(part))
-
-                        filename_clean = os.path.join(*filename_parts) if filename_parts else original_basename
-
-                        # 如果模板里没有扩展名，就保留原始扩展名
-                        if not os.path.splitext(filename_clean)[1] and ext:
-                            filename_clean = f"{filename_clean}.{ext}"
-
-                        # 为同一场景的多个文件添加区分后缀（仅在 multi_file_mode 为 "all" 时）
-                        filename_clean = apply_multi_file_suffix(filename_clean, scene, file_obj, settings)
+                        
+                        # 应用模板并添加后缀
+                        filename_clean = _apply_template_and_suffix(template, scene, file_path, file_obj, settings)
 
                         # 组合最终路径：目标基础目录 + 第一级子目录 + 文件名
                         abs_target = os.path.join(target_base_dir, first_level_dir, filename_clean)
@@ -577,39 +561,12 @@ def build_target_path(
                         target_root = settings["target_root"].strip()
                         if not target_root:
                             raise RuntimeError("目标目录(target_root)未配置，无法构建路径")
-                        
+
                         # 使用模板生成路径
                         template = settings["filename_template"].strip()
-                        vars_map = build_template_vars(scene, file_path, file_obj)
-                        original_basename = vars_map["original_basename"]
-                        ext = vars_map["ext"]
-
-                        # 避免变量中出现路径分隔符导致被当成子目录
-                        vars_map_for_path = dict(vars_map)
-                        for k, v in vars_map_for_path.items():
-                            if isinstance(v, str):
-                                vars_map_for_path[k] = v.replace("\\", "_").replace("/", "_")
-
-                        # 先做模板替换
-                        try:
-                            rel_path = template.format(**vars_map_for_path)
-                        except Exception as e:
-                            raise RuntimeError(f"命名模板解析失败: {e}")
-
-                        # 把路径里的每一段都 sanitize 一下
-                        rel_parts = []
-                        for part in re.split(r"[\\/]+", rel_path):
-                            if part:
-                                rel_parts.append(safe_segment(part))
-
-                        rel_path_clean = os.path.join(*rel_parts) if rel_parts else original_basename
-
-                        # 如果模板里没有扩展名，就保留原始扩展名
-                        if not os.path.splitext(rel_path_clean)[1] and ext:
-                            rel_path_clean = f"{rel_path_clean}.{ext}"
-
-                        # 为同一场景的多个文件添加区分后缀（仅在 multi_file_mode 为 "all" 时）
-                        rel_path_clean = apply_multi_file_suffix(rel_path_clean, scene, file_obj, settings)
+                        
+                        # 应用模板并添加后缀
+                        rel_path_clean = _apply_template_and_suffix(template, scene, file_path, file_obj, settings)
 
                         abs_target = os.path.join(target_root, rel_path_clean)
                         return abs_target
@@ -630,36 +587,8 @@ def build_target_path(
         if not target_root:
             raise RuntimeError("目标目录(target_root)未配置")
 
-        vars_map = build_template_vars(scene, file_path, file_obj)
-        original_basename = vars_map["original_basename"]
-        ext = vars_map["ext"]
-
-        # 避免变量中出现路径分隔符导致被当成子目录
-        vars_map_for_path = dict(vars_map)
-        for k, v in vars_map_for_path.items():
-            if isinstance(v, str):
-                vars_map_for_path[k] = v.replace("\\", "_").replace("/", "_")
-
-        # 先做模板替换
-        try:
-            rel_path = template.format(**vars_map_for_path)
-        except Exception as e:
-            raise RuntimeError(f"命名模板解析失败: {e}")
-
-        # 把路径里的每一段都 sanitize 一下
-        rel_parts = []
-        for part in re.split(r"[\\/]+", rel_path):
-            if part:
-                rel_parts.append(safe_segment(part))
-
-        rel_path_clean = os.path.join(*rel_parts) if rel_parts else original_basename
-
-        # 如果模板里没有扩展名，就保留原始扩展名
-        if not os.path.splitext(rel_path_clean)[1] and ext:
-            rel_path_clean = f"{rel_path_clean}.{ext}"
-
-        # 为同一场景的多个文件添加区分后缀（仅在 multi_file_mode 为 "all" 时）
-        rel_path_clean = apply_multi_file_suffix(rel_path_clean, scene, file_obj, settings)
+        # 应用模板并添加后缀
+        rel_path_clean = _apply_template_and_suffix(template, scene, file_path, file_obj, settings)
 
         abs_target = os.path.join(target_root, rel_path_clean)
         return abs_target
