@@ -10,9 +10,9 @@
 
 1. 进入 **设置 → 插件 → 可用插件**
 2. 点击 **添加源**
-3. 输入 URL: `https://mayziran.github.io/StashtoEmby/stable/index.yml`
+3. 输入 URL: `https://mayziran.github.io/StashtoEmby/stable/index.yml` 名称:StashtoEmby 本地路径: StashtoEmby
 4. 点击 **重新加载**
-5. 在 "mayziran" 下浏览并安装可用插件
+5. 在 "StashtoEmby" 下浏览并安装可用插件
 
 ## 可用插件
 
@@ -26,7 +26,7 @@
 - 支持批量同步操作
 - 支持多种同步模式
 
-[详细文档](https://github.com/mayziran/StashtoEmby/blob/main/plugins/actorSyncEmby/README.md)
+[详细文档](https://github.com/mayziran/StashtoEmby/blob/master/plugins/actorSyncEmby/README.md)
 
 ### AutoMoveOrganized
 
@@ -40,7 +40,7 @@
 - 生成 NFO 文件和下载封面图
 - 支持AI翻译元数据
 
-[详细文档](https://github.com/mayziran/StashtoEmby/blob/main/plugins/AutoMoveOrganized/README.md)
+[详细文档](https://github.com/mayziran/StashtoEmby/blob/master/plugins/AutoMoveOrganized/README.md)
 
 ## 支持
 
