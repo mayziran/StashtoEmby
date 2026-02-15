@@ -1,0 +1,4 @@
+# Dependencies for actorSyncEmby plugin
+
+# Core dependencies
+requests

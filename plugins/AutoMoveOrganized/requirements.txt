@@ -1,0 +1,8 @@
+# Dependencies for AutoMoveOrganized plugin
+
+# Core dependencies
+requests
+
+# Dependencies for image processing (when overlay_studio_logo_on_poster is enabled)
+Pillow
+cairosvg
