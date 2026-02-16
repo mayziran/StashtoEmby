@@ -720,7 +720,7 @@ def upload_actor_to_emby(performer: Dict[str, Any], settings: Dict[str, Any]) ->
         log.error(f"上传演员 {name} 到Emby失败: {e}")
 
 
-def update_actor_metadata_in_emby(performer: Dict[str, Any], original_actor_id: str, settings: Dict[str, Any]) -> None:
+def update_actor_metadata_in_emby(performer: Dict[str, Any], actor_id: str, settings: Dict[str, Any]) -> None:
     """
     更新Emby中演员的元数据。
     """
@@ -730,8 +730,6 @@ def update_actor_metadata_in_emby(performer: Dict[str, Any], original_actor_id: 
     if not emby_server or not emby_api_key:
         return
 
-    # 对于演员信息，可能需要使用Persons端点而非Items端点
-    # 首先尝试使用演员名称来定位，因为通过Persons API获取的ID可能与Items API不匹配
     name = performer.get("name", "")
     if not name:
         log.error("演员名称为空，无法更新元数据")
@@ -759,268 +757,187 @@ def update_actor_metadata_in_emby(performer: Dict[str, Any], original_actor_id: 
 
     user_id = users_data[0]['Id']
 
-    # 尝试通过搜索找到演员项目
-    encoded_name = quote(name)
-    search_url = f"{emby_server}/emby/Items?IncludeItemTypes=Person&Recursive=true&searchTerm={encoded_name}&api_key={emby_api_key}"
+    # 直接使用传入的 actor_id，不再重新搜索
+    found_actor_id = actor_id
+    log.info(f"使用传入的ID更新演员 {name} 的元数据，ID: {found_actor_id}")
 
+    # 获取演员完整信息 - 使用传入的ID
+    get_url = f"{emby_server}/emby/Users/{user_id}/Items/{found_actor_id}?api_key={emby_api_key}"
     try:
-        try:
-            search_response = requests.get(search_url)
-        except requests.exceptions.RequestException as e:
-            log.error(f"搜索演员 {name} 时发生网络错误: {e}")
-            return
+        r_get = requests.get(get_url)
+    except requests.exceptions.RequestException as e:
+        log.error(f"获取演员 {performer.get('name')} 完整信息时发生网络错误: {e}")
+        return
+    if r_get.status_code != 200:
+        log.error(f"无法获取演员 {performer.get('name')} 的完整信息，状态码: {r_get.status_code}")
+        log.debug(f"响应内容: {r_get.text}")
+        return
+    try:
+        person_data = r_get.json()
+    except ValueError as e:
+        log.error(f"解析演员 {performer.get('name')} 完整信息JSON时发生错误: {e}")
+        return
 
-        if search_response.status_code == 200:
+    # 整理元数据
+    from datetime import datetime, timezone
+    lines = []
+    # 最优先的信息
+    if performer.get('disambiguation'):
+        lines.append("消歧义: " + performer['disambiguation'])
+
+    # 优先级较高的信息
+    if performer.get('gender'):
+        # 将英文性别转换为中文
+        gender_map_cn = {
+            'MALE': '男性',
+            'FEMALE': '女性',
+            'TRANSGENDER_MALE': '跨性别男性',
+            'TRANSGENDER_FEMALE': '跨性别女性',
+            'INTERSEX': '间性人',
+            'NON_BINARY': '非二元性别'
+        }
+        gender_cn = gender_map_cn.get(performer['gender'], performer['gender'])  # 如果找不到对应中文，使用原文
+        lines.append("性别: " + gender_cn)
+    if performer.get('country'):
+        lines.append("国家: " + performer["country"])
+    if performer.get('ethnicity'):
+        lines.append("人种: " + performer["ethnicity"])
+    if performer.get('birthdate'):
+        lines.append("出生日期: " + performer["birthdate"])
+    if performer.get('death_date') and performer.get('death_date').strip():
+        lines.append("去世日期: " + performer["death_date"])
+    if performer.get('career_length'):
+        lines.append("职业生涯: " + performer["career_length"])
+    if performer.get('height_cm'):
+        lines.append("身高: " + str(performer["height_cm"]) + " cm")
+    if performer.get('weight'):
+        lines.append("体重: " + str(performer["weight"]) + " kg")
+    if performer.get('measurements'):
+        lines.append("三围尺寸: " + performer["measurements"])
+    if performer.get('fake_tits'):
+        lines.append("假奶: " + performer["fake_tits"])
+    if performer.get('penis_length'):
+        lines.append("阴茎长度: " + str(performer["penis_length"]) + " cm")
+    if performer.get('circumcised'):
+        lines.append("割包皮: " + performer["circumcised"])
+
+    # 其他信息
+    if performer.get('eye_color'):
+        lines.append("瞳孔颜色: " + performer["eye_color"])
+    if performer.get('hair_color'):
+        lines.append("头发颜色: " + performer["hair_color"])
+    if performer.get('tattoos'):
+        lines.append("纹身: " + performer["tattoos"])
+    if performer.get('piercings'):
+        lines.append("穿孔: " + performer["piercings"])
+
+    # 添加别名信息
+    alias_list = performer.get('alias_list', [])
+    if alias_list and isinstance(alias_list, list) and len(alias_list) > 0:
+        aliases_str = " / ".join([alias for alias in alias_list if alias])
+        if aliases_str:
+            lines.append("别名: " + aliases_str)
+
+    # 添加Urls信息
+    urls = performer.get('urls', [])
+    if urls and isinstance(urls, list) and len(urls) > 0:
+        # 只保留非空的URL
+        valid_urls = [url for url in urls if url and isinstance(url, str) and url.strip()]
+        if valid_urls:
+            urls_str = "\n".join(valid_urls)  # 直接列出链接，不加"链接:"前缀
+            lines.append("相关链接:\n" + urls_str)
+
+    if lines:
+        overview = '\n'.join(lines)
+        person_data['Overview'] = overview
+
+    # 更新生日信息
+    if performer.get('birthdate'):
+        birthdate = performer.get("birthdate")
+        if birthdate:
             try:
-                search_data = search_response.json()
-            except ValueError as e:
-                log.error(f"解析搜索结果JSON时发生错误: {e}")
-                return
-            items = search_data.get('Items', [])
+                dt = datetime.strptime(birthdate, "%Y-%m-%d").replace(
+                    hour=0, minute=0, second=0, microsecond=0, tzinfo=timezone.utc
+                )
+                person_data["PremiereDate"] = dt.isoformat(
+                    timespec="milliseconds"
+                ).replace("+00:00", "Z")
+            except Exception:
+                person_data["PremiereDate"] = None
 
-            if items:
-                # 使用搜索结果中的ID进行更新
-                found_actor_id = items[0]['Id']
-                log.info(f"通过搜索找到演员 {name}，使用ID: {found_actor_id} 进行元数据更新")
+    # 更新死亡日期信息
+    if performer.get('death_date') and performer.get('death_date').strip():
+        deathdate = performer.get("death_date")
+        if deathdate:
+            try:
+                dt = datetime.strptime(deathdate, "%Y-%m-%d").replace(
+                    hour=0, minute=0, second=0, microsecond=0, tzinfo=timezone.utc
+                )
+                person_data["EndDate"] = dt.isoformat(
+                    timespec="milliseconds"
+                ).replace("+00:00", "Z")
+            except Exception:
+                person_data["EndDate"] = None
 
-                # 对于演员项目，可能需要使用Persons端点获取信息
-                # 尝试使用Persons端点
-                person_url = f"{emby_server}/emby/Persons/{quote(name)}?api_key={emby_api_key}"
-                try:
-                    r_person = requests.get(person_url)
-                except requests.exceptions.RequestException as e:
-                    log.error(f"获取演员 {name} 信息时发生网络错误: {e}")
-                    return
+    country = performer.get("country")
+    if country:
+        person_data["ProductionLocations"] = [country]
 
-                if r_person.status_code == 200:
-                    try:
-                        data = r_person.json()
-                    except ValueError as e:
-                        log.error(f"解析演员 {name} 信息JSON时发生错误: {e}")
-                        return
-                    # 使用搜索到的ID更新数据中的ID字段
-                    data['Id'] = found_actor_id
-                else:
-                    log.warning(f"通过Persons端点获取演员信息失败，状态码: {r_person.status_code}，尝试使用Items端点")
-                    # 如果Persons端点失败，尝试Items端点
-                    item_url = f"{emby_server}/emby/Items/{found_actor_id}?api_key={emby_api_key}"
-                    try:
-                        r_item = requests.get(item_url)
-                    except requests.exceptions.RequestException as e:
-                        log.error(f"获取演员 {name} 详细信息时发生网络错误: {e}")
-                        return
+    # 添加标签（Tags）
+    tag_items = []
 
-                    if r_item.status_code != 200:
-                        log.error(f"无法获取演员 {name} 的详细信息，状态码: {r_item.status_code}")
-                        log.debug(f"响应内容: {r_item.text}")
-                        return
+    if performer.get('gender'):
+        # 将英文性别转换为中文
+        gender_map_cn = {
+            'MALE': '男性',
+            'FEMALE': '女性',
+            'TRANSGENDER_MALE': '跨性别男性',
+            'TRANSGENDER_FEMALE': '跨性别女性',
+            'INTERSEX': '间性人',
+            'NON_BINARY': '非二元性别'
+        }
+        gender_cn = gender_map_cn.get(performer['gender'], performer['gender'])  # 如果找不到对应中文，使用原文
+        tag_items.append({"Name": f"性别:{gender_cn}", "Id": None})
+    if performer.get('country'):
+        tag_items.append({"Name": f"国家:{performer['country']}", "Id": None})
+    if performer.get('ethnicity'):
+        tag_items.append({"Name": f"人种:{performer['ethnicity']}", "Id": None})
+    if performer.get('fake_tits'):
+        tag_items.append({"Name": f"假奶:{performer['fake_tits']}", "Id": None})
+    if performer.get('circumcised'):
+        tag_items.append({"Name": f"割包皮:{performer['circumcised']}", "Id": None})
+    if performer.get('hair_color'):
+        tag_items.append({"Name": f"头发颜色:{performer['hair_color']}", "Id": None})
+    if performer.get('height_cm'):
+        tag_items.append({"Name": f"身高:{performer['height_cm']}cm", "Id": None})
+    if performer.get('weight'):
+        tag_items.append({"Name": f"体重:{performer['weight']}kg", "Id": None})
+    if performer.get('penis_length'):
+        tag_items.append({"Name": f"阴茎长度:{performer['penis_length']}cm", "Id": None})
 
-                    try:
-                        data = r_item.json()
-                    except ValueError as e:
-                        log.error(f"解析演员 {name} 详细信息JSON时发生错误: {e}")
-                        return
+    if tag_items:
+        person_data['TagItems'] = tag_items
 
-                # 整理元数据
-                from datetime import datetime, timezone
-                lines = []
-                # 最优先的信息
-                if performer.get('disambiguation'):
-                    lines.append("消歧义: " + performer['disambiguation'])
-                
-                # 优先级较高的信息
-                if performer.get('gender'):
-                    # 将英文性别转换为中文
-                    gender_map_cn = {
-                        'MALE': '男性',
-                        'FEMALE': '女性',
-                        'TRANSGENDER_MALE': '跨性别男性',
-                        'TRANSGENDER_FEMALE': '跨性别女性',
-                        'INTERSEX': '间性人',
-                        'NON_BINARY': '非二元性别'
-                    }
-                    gender_cn = gender_map_cn.get(performer['gender'], performer['gender'])  # 如果找不到对应中文，使用原文
-                    lines.append("性别: " + gender_cn)
-                if performer.get('country'):
-                    lines.append("国家: " + performer["country"])
-                if performer.get('ethnicity'):
-                    lines.append("人种: " + performer["ethnicity"])
-                if performer.get('birthdate'):
-                    lines.append("出生日期: " + performer["birthdate"])
-                if performer.get('death_date') and performer.get('death_date').strip():
-                    lines.append("去世日期: " + performer["death_date"])
-                if performer.get('career_length'):
-                    lines.append("职业生涯: " + performer["career_length"])
-                if performer.get('height_cm'):
-                    lines.append("身高: " + str(performer["height_cm"]) + " cm")
-                if performer.get('weight'):
-                    lines.append("体重: " + str(performer["weight"]) + " kg")
-                if performer.get('measurements'):
-                    lines.append("三围尺寸: " + performer["measurements"])
-                if performer.get('fake_tits'):
-                    lines.append("假奶: " + performer["fake_tits"])
-                if performer.get('penis_length'):
-                    lines.append("阴茎长度: " + str(performer["penis_length"]) + " cm")
-                if performer.get('circumcised'):
-                    lines.append("割包皮: " + performer["circumcised"])
-                
-                # 其他信息
-                if performer.get('eye_color'):
-                    lines.append("瞳孔颜色: " + performer["eye_color"])
-                if performer.get('hair_color'):
-                    lines.append("头发颜色: " + performer["hair_color"])
-                if performer.get('tattoos'):
-                    lines.append("纹身: " + performer["tattoos"])
-                if performer.get('piercings'):
-                    lines.append("穿孔: " + performer["piercings"])
-                
-                # 添加别名信息
-                alias_list = performer.get('alias_list', [])
-                if alias_list and isinstance(alias_list, list) and len(alias_list) > 0:
-                    aliases_str = " / ".join([alias for alias in alias_list if alias])
-                    if aliases_str:
-                        lines.append("别名: " + aliases_str)
-                
-                # 添加Urls信息
-                urls = performer.get('urls', [])
-                if urls and isinstance(urls, list) and len(urls) > 0:
-                    # 只保留非空的URL
-                    valid_urls = [url for url in urls if url and isinstance(url, str) and url.strip()]
-                    if valid_urls:
-                        urls_str = "\n".join(valid_urls)  # 直接列出链接，不加"链接:"前缀
-                        lines.append("相关链接:\n" + urls_str)
+    # 添加Stash ID作为外部标识符
+    stash_id = performer.get("id")
+    if stash_id:
+        # 确保ProviderIds字段存在
+        if 'ProviderIds' not in person_data:
+            person_data['ProviderIds'] = {}
+        # 添加Stash ID
+        person_data['ProviderIds']['Stash'] = str(stash_id)
 
-                if lines:
-                    overview = '\n'.join(lines)
-                    data['Overview'] = overview
-
-                # 更新生日信息
-                if performer.get('birthdate'):
-                    birthdate = performer.get("birthdate")
-                    if birthdate:
-                        try:
-                            dt = datetime.strptime(birthdate, "%Y-%m-%d").replace(
-                                hour=0, minute=0, second=0, microsecond=0, tzinfo=timezone.utc
-                            )
-                            data["PremiereDate"] = dt.isoformat(
-                                timespec="milliseconds"
-                            ).replace("+00:00", "Z")
-                        except Exception:
-                            data["PremiereDate"] = None
-
-                # 更新死亡日期信息
-                if performer.get('death_date') and performer.get('death_date').strip():
-                    deathdate = performer.get("death_date")
-                    if deathdate:
-                        try:
-                            dt = datetime.strptime(deathdate, "%Y-%m-%d").replace(
-                                hour=0, minute=0, second=0, microsecond=0, tzinfo=timezone.utc
-                            )
-                            data["EndDate"] = dt.isoformat(
-                                timespec="milliseconds"
-                            ).replace("+00:00", "Z")
-                        except Exception:
-                            data["EndDate"] = None
-
-                country = performer.get("country")
-                if country:
-                    data["ProductionLocations"] = [country]
-
-                # 使用emby-toolkit的正确方法更新演员元数据
-                # 1. 先获取演员完整信息
-                # 2. 修改所需字段
-                # 3. 通过POST方法更新到/Items/{person_id}
-
-                # 获取演员完整信息 - 使用搜索到的ID
-                get_url = f"{emby_server}/emby/Users/{user_id}/Items/{found_actor_id}?api_key={emby_api_key}"
-                try:
-                    r_get = requests.get(get_url)
-                except requests.exceptions.RequestException as e:
-                    log.error(f"获取演员 {performer.get('name')} 完整信息时发生网络错误: {e}")
-                    return
-                if r_get.status_code != 200:
-                    log.error(f"无法获取演员 {performer.get('name')} 的完整信息，状态码: {r_get.status_code}")
-                    log.debug(f"响应内容: {r_get.text}")
-                    return
-                try:
-                    person_data = r_get.json()
-                except ValueError as e:
-                    log.error(f"解析演员 {performer.get('name')} 完整信息JSON时发生错误: {e}")
-                    return
-
-                # 更新所需字段
-                if data.get('Overview'):
-                    person_data['Overview'] = data['Overview']
-                if data.get('PremiereDate'):
-                    person_data['PremiereDate'] = data['PremiereDate']
-                if data.get('EndDate'):
-                    person_data['EndDate'] = data['EndDate']
-                if data.get('ProductionLocations'):
-                    person_data['ProductionLocations'] = data['ProductionLocations']
-
-                # 添加标签（Tags）
-                tag_items = []
-
-                if performer.get('gender'):
-                    # 将英文性别转换为中文
-                    gender_map_cn = {
-                        'MALE': '男性',
-                        'FEMALE': '女性',
-                        'TRANSGENDER_MALE': '跨性别男性',
-                        'TRANSGENDER_FEMALE': '跨性别女性',
-                        'INTERSEX': '间性人',
-                        'NON_BINARY': '非二元性别'
-                    }
-                    gender_cn = gender_map_cn.get(performer['gender'], performer['gender'])  # 如果找不到对应中文，使用原文
-                    tag_items.append({"Name": f"性别:{gender_cn}", "Id": None})
-                if performer.get('country'):
-                    tag_items.append({"Name": f"国家:{performer['country']}", "Id": None})
-                if performer.get('ethnicity'):
-                    tag_items.append({"Name": f"人种:{performer['ethnicity']}", "Id": None})
-                if performer.get('fake_tits'):
-                    tag_items.append({"Name": f"假奶:{performer['fake_tits']}", "Id": None})
-                if performer.get('circumcised'):
-                    tag_items.append({"Name": f"割包皮:{performer['circumcised']}", "Id": None})
-                if performer.get('hair_color'):
-                    tag_items.append({"Name": f"头发颜色:{performer['hair_color']}", "Id": None})
-                if performer.get('height_cm'):
-                    tag_items.append({"Name": f"身高:{performer['height_cm']}cm", "Id": None})
-                if performer.get('weight'):
-                    tag_items.append({"Name": f"体重:{performer['weight']}kg", "Id": None})
-                if performer.get('penis_length'):
-                    tag_items.append({"Name": f"阴茎长度:{performer['penis_length']}cm", "Id": None})
-
-                if tag_items:
-                    person_data['TagItems'] = tag_items
-
-                # 添加Stash ID作为外部标识符
-                stash_id = performer.get("id")
-                if stash_id:
-                    # 确保ProviderIds字段存在
-                    if 'ProviderIds' not in person_data:
-                        person_data['ProviderIds'] = {}
-                    # 添加Stash ID
-                    person_data['ProviderIds']['Stash'] = str(stash_id)
-
-
-                # 使用POST方法更新到Items端点（无Users部分）
-                update_url = f"{emby_server}/emby/Items/{found_actor_id}?api_key={emby_api_key}"
-                try:
-                    r2 = requests.post(update_url, json=person_data, headers={"Content-Type": "application/json"})
-                    if r2.status_code in [200, 204]:
-                        log.info(f"成功更新演员 {performer.get('name')} 的元数据")
-                    else:
-                        log.error(f"更新演员 {performer.get('name')} 元数据失败，状态码: {r2.status_code}")
-                        log.debug(f"响应内容: {r2.text}")
-                except requests.exceptions.RequestException as e:
-                    log.error(f"更新演员 {performer.get('name')} 元数据失败: {e}")
-            else:
-                log.error(f"无法在Emby中找到演员 {name}")
+    # 使用POST方法更新到Items端点
+    update_url = f"{emby_server}/emby/Items/{found_actor_id}?api_key={emby_api_key}"
+    try:
+        r2 = requests.post(update_url, json=person_data, headers={"Content-Type": "application/json"})
+        if r2.status_code in [200, 204]:
+            log.info(f"成功更新演员 {performer.get('name')} 的元数据")
         else:
-            log.error(f"搜索演员 {name} 失败，状态码: {search_response.status_code}")
-            log.debug(f"响应内容: {search_response.text}")
-    except Exception as e:
-        log.error(f"更新演员 {performer.get('name')} 元数据时发生异常: {e}")
+            log.error(f"更新演员 {performer.get('name')} 元数据失败，状态码: {r2.status_code}")
+            log.debug(f"响应内容: {r2.text}")
+    except requests.exceptions.RequestException as e:
+        log.error(f"更新演员 {performer.get('name')} 元数据失败: {e}")
 
 
 def sync_performer(performer_id: str, settings: Dict[str, Any], stash: StashInterface) -> bool:
