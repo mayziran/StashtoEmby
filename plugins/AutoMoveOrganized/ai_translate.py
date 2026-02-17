@@ -75,13 +75,12 @@ def _call_openai_compatible_api_for_text(
         "Content-Type": "application/json",
     }
 
-    # 构建 system prompt，如果有演员名则添加到提示词中
+    # 构建 system prompt，如果有演员名则添加到提示词中（紧挨着主提示词，避免模型误解）
     system_prompt = cfg["prompt"]
     if performers:
         performers_str = ", ".join(performers)
         system_prompt = (
-            f"{cfg['prompt']}\n"
-            f"Actors in this video: {performers_str}"
+            f"{cfg['prompt']} Actors in this video: {performers_str}"
         )
 
     body = {
