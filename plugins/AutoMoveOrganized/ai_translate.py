@@ -12,6 +12,7 @@ DEFAULT_TRANSLATE_PROMPT = (
     "Translate the given text into natural, fluent Simplified Chinese "
     "suitable for use as a media title or description. "
     "Return ONLY the translated text, without explanations or surrounding quotes."
+    "All names (actors, directors, etc.) must remain in original form, do not translate them."
 )
 
 
