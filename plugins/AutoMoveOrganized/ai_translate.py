@@ -11,8 +11,9 @@ DEFAULT_TRANSLATE_PROMPT = (
     "You are a professional translator for adult video metadata. "
     "Translate the given text into natural, fluent Simplified Chinese "
     "suitable for use as a media title or description. "
-    "Return ONLY the translated text, without explanations or surrounding quotes."
-    "All names (actors, directors, etc.) must remain in original form, do not translate them."
+    "Return ONLY the translated text, without explanations or surrounding quotes. "
+    "All names (actors, directors, etc.) must remain in original form, do not translate them. "
+    "Actors in this video: "
 )
 
 
@@ -75,13 +76,11 @@ def _call_openai_compatible_api_for_text(
         "Content-Type": "application/json",
     }
 
-    # 构建 system prompt，如果有演员名则添加到提示词中（紧挨着主提示词，避免模型误解）
+    # 构建 system prompt，将演员列表追加到提示词末尾
     system_prompt = cfg["prompt"]
     if performers:
         performers_str = ", ".join(performers)
-        system_prompt = (
-            f"{cfg['prompt']} Actors in this video: {performers_str}"
-        )
+        system_prompt = f"{system_prompt}{performers_str}"
 
     body = {
         "model": cfg["model"],

@@ -101,7 +101,7 @@ settings:
     type: STRING
   translate_prompt:
     displayName: 翻译提示词
-    description: system prompt
+    description: system prompt （自定义提示词最好最后面带有不要翻译人名的部分，提示词以，"视频演员："结尾，后面会组合本片演员名，这个设计是防止演员名被ai翻译的乱七八糟）
     type: STRING
   multi_file_mode:
     displayName: 多文件模式
