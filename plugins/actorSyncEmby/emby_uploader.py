@@ -172,7 +172,7 @@ def _upload_image_to_emby(emby_server: str, emby_api_key: str, actor_id: str, im
 
     # 如果用户特定端点失败，尝试直接 Items 端点
     if r_upload.status_code not in [200, 204] and user_id:
-        log.debug(f"用户特定端点上传图片失败，状态码：{r_upload.status_code}，尝试直接 Items 端点")
+        log.info(f"用户特定端点上传图片失败，状态码：{r_upload.status_code}，尝试直接 Items 端点")
         upload_url = f'{emby_server}/emby/Items/{actor_id}/Images/Primary?api_key={emby_api_key}'
         try:
             r_upload = requests.post(url=upload_url, data=b6_pic, headers=headers)
@@ -235,7 +235,7 @@ def update_actor_metadata_in_emby(performer: Dict[str, Any], actor_id: str, emby
         return
     if r_get.status_code != 200:
         log.error(f"无法获取演员 {performer.get('name')} 的完整信息，状态码：{r_get.status_code}")
-        log.debug(f"响应内容：{r_get.text}")
+        log.info(f"响应内容：{r_get.text}")
         return
     try:
         person_data = r_get.json()
@@ -395,7 +395,7 @@ def update_actor_metadata_in_emby(performer: Dict[str, Any], actor_id: str, emby
             log.info(f"成功更新演员 {performer.get('name')} 的元数据")
         else:
             log.error(f"更新演员 {performer.get('name')} 元数据失败，状态码：{r2.status_code}")
-            log.debug(f"响应内容：{r2.text}")
+            log.info(f"响应内容：{r2.text}")
     except requests.exceptions.RequestException as e:
         log.error(f"更新演员 {performer.get('name')} 元数据失败：{e}")
 

@@ -20,7 +20,7 @@ from stashapi.stashapp import StashInterface
 PLUGIN_ID = "actorSyncEmby"
 
 # 导入 Emby 上传模块
-from emby_uploader import upload_actor_to_emby, safe_segment, build_absolute_url, _download_binary
+from emby_uploader import upload_actor_to_emby as upload_to_emby, safe_segment, build_absolute_url, _download_binary
 
 
 def task_log(message: str, progress: float | None = None) -> None:
@@ -321,8 +321,8 @@ def upload_actor_to_emby(performer: Dict[str, Any], settings: Dict[str, Any]) ->
     actor_output_dir = settings.get("actor_output_dir", "").strip()
     sync_mode = settings.get("sync_mode", 1)
     download_images = settings.get("download_actor_images", True)
-    
-    upload_actor_to_emby(
+
+    upload_to_emby(
         performer=performer,
         emby_server=emby_server,
         emby_api_key=emby_api_key,
