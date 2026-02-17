@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import requests
 import stashapi.log as log
@@ -59,6 +59,7 @@ def _call_openai_compatible_api_for_text(
     text: str,
     cfg: Dict[str, Any],
     field: str,
+    performers: Optional[List[str]] = None,
 ) -> Optional[str]:
     """
     调用 OpenAI 兼容的 chat/completions 接口，翻译单段文本。
@@ -74,11 +75,20 @@ def _call_openai_compatible_api_for_text(
         "Content-Type": "application/json",
     }
 
+    # 构建 system prompt，如果有演员名则添加到提示词中
+    system_prompt = cfg["prompt"]
+    if performers:
+        performers_str = ", ".join(performers)
+        system_prompt = (
+            f"{cfg['prompt']}\n"
+            f"Actors in this video: [{performers_str}]"
+        )
+
     body = {
         "model": cfg["model"],
         "temperature": cfg["temperature"],
         "messages": [
-            {"role": "system", "content": cfg["prompt"]},
+            {"role": "system", "content": system_prompt},
             {"role": "user", "content": text or ""},
         ],
     }
@@ -107,10 +117,17 @@ def translate_title_and_plot(
     title: str,
     plot: str,
     settings: Dict[str, Any],
+    performers: Optional[List[str]] = None,
 ) -> Tuple[Optional[str], Optional[str]]:
     """
     根据配置调用翻译服务，返回 (translated_title, translated_plot)。
     如果翻译失败或未启用，则返回 (None, None)，由调用方决定回退逻辑。
+
+    Args:
+        title: 标题
+        plot: 简介
+        settings: 设置字典
+        performers: 演员名列表，用于告诉 AI 不要翻译这些名字
     """
     cfg = _get_translate_config(settings)
 
@@ -126,12 +143,12 @@ def translate_title_and_plot(
 
     if cfg["translate_title"] and title:
         translated_title = _call_openai_compatible_api_for_text(
-            title, cfg, field="title"
+            title, cfg, field="title", performers=performers
         )
 
     if cfg["translate_plot"] and plot:
         translated_plot = _call_openai_compatible_api_for_text(
-            plot, cfg, field="plot"
+            plot, cfg, field="plot", performers=performers
         )
 
     return translated_title, translated_plot

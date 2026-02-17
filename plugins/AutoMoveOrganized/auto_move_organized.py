@@ -1477,6 +1477,12 @@ def write_nfo_for_scene(video_path: str, scene: Dict[str, Any], settings: Dict[s
     # 系列 / 合集：取第一个 group 名称
     collection_name = vars_map.get("group_name") or ""
 
+    # 获取演员名列表，用于翻译时告诉 AI 不要翻译这些名字
+    performer_names: List[str] = []
+    for p in scene.get("performers") or []:
+        if isinstance(p, dict) and p.get("name"):
+            performer_names.append(p["name"])
+
     # AI 翻译（可选）
     translated_title = None
     translated_plot = None
@@ -1486,6 +1492,7 @@ def write_nfo_for_scene(video_path: str, scene: Dict[str, Any], settings: Dict[s
             title=title,
             plot=plot,
             settings=settings,
+            performers=performer_names if performer_names else None,
         )
     except Exception as e:
         log.error(f"[translator] 调用翻译失败: {e}")
