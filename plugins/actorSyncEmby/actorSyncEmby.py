@@ -100,12 +100,13 @@ def load_settings(stash: StashInterface) -> Dict[str, Any]:
     emby_server = _get_val("embyServer", "")
     emby_api_key = _get_val("embyApiKey", "")
     dry_run = bool(_get_val("dryRun", False))
+    enable_worker_log = bool(_get_val("enableWorkerLog", True))
 
     log.info(
         f"Loaded settings: actor_output_dir='{actor_output_dir}', "
         f"export_actor_nfo={export_actor_nfo}, download_actor_images={download_actor_images}, "
         f"sync_to_emby={sync_to_emby}, sync_mode={sync_mode}, emby_server='{emby_server}', "
-        f"dry_run={dry_run}"
+        f"dry_run={dry_run}, enable_worker_log={enable_worker_log}"
     )
 
     return {
@@ -117,6 +118,7 @@ def load_settings(stash: StashInterface) -> Dict[str, Any]:
         "emby_server": emby_server,
         "emby_api_key": emby_api_key,
         "dry_run": dry_run,
+        "enableWorkerLog": enable_worker_log,
     }
 
 

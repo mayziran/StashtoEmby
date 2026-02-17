@@ -3,7 +3,7 @@
 name: Auto Move Organized
 description: "在场景更新后，把已整理(organized)的文件移动到指定目录，并按模板重命名。支持Hook模式（自动响应场景更新）和Task模式（手动批量处理）。"
 
-version: "0.2.5"
+version: "0.2.6"
 url: https://github.com/mayziran/StashtoEmby/tree/master/plugins/AutoMoveOrganized
 
 # UI 设置：在设置 -> 插件 -> 本插件 里会显示
