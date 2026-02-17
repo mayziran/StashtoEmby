@@ -81,7 +81,7 @@ def _call_openai_compatible_api_for_text(
         performers_str = ", ".join(performers)
         system_prompt = (
             f"{cfg['prompt']}\n"
-            f"Actors in this video: [{performers_str}]"
+            f"Actors in this video: {performers_str}"
         )
 
     body = {
