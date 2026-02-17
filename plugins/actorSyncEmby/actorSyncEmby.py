@@ -7,26 +7,20 @@
 版本: 1.0.0
 """
 
-import base64
 import json
 import os
-import re
-import subprocess
 import sys
-import time
 import xml.etree.ElementTree as ET
 from typing import Any, Dict, List
-from urllib.parse import urlparse, quote
 
-import requests
 import stashapi.log as log
 from stashapi.stashapp import StashInterface
 
 # 必须和 YAML 文件名（不含扩展名）对应
 PLUGIN_ID = "actorSyncEmby"
 
-# 常见图片扩展名
-IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".svg"}
+# 导入 Emby 上传模块
+from emby_uploader import upload_actor_to_emby, safe_segment, build_absolute_url, _download_binary
 
 
 def task_log(message: str, progress: float | None = None) -> None:
@@ -124,141 +118,6 @@ def load_settings(stash: StashInterface) -> Dict[str, Any]:
         "emby_api_key": emby_api_key,
         "dry_run": dry_run,
     }
-
-
-def safe_segment(segment: str) -> str:
-    """
-    简单清理路径段，避免出现奇怪字符。
-    """
-    segment = segment.strip().replace("\\", "_").replace("/", "_")
-    # 去掉常见非法字符
-    segment = re.sub(r'[<>:"|?*]', "_", segment)
-    # 防止空字符串
-    return segment or "_"
-
-
-
-
-def build_absolute_url(url: str, settings: Dict[str, Any]) -> str:
-    """
-    把相对路径补全为带协议/主机的绝对 URL，方便下载图片。
-    """
-    if not url:
-        return url
-    if url.startswith("http://") or url.startswith("https://"):
-        return url
-
-    server_conn = settings.get("server_connection") or {}
-    scheme = server_conn.get("Scheme", "http")
-    host = server_conn.get("Host", "localhost")
-    port = server_conn.get("Port")
-
-    base = f"{scheme}://{host}"
-    if port:
-        base = f"{base}:{port}"
-
-    if not url.startswith("/"):
-        url = "/" + url
-
-    return base + url
-
-
-
-def _build_requests_session(settings: Dict[str, Any]) -> requests.Session:
-    """
-    基于 server_connection 构建一个带 SessionCookie 的 requests 会话，
-    用于从 Stash 下载演员图片。
-    """
-    server_conn = settings.get("server_connection") or {}
-    session = requests.Session()
-
-    # 1) 使用 SessionCookie（保持向后兼容）
-    cookie = server_conn.get("SessionCookie") or {}
-    name = cookie.get("Name") or cookie.get("name")
-    value = cookie.get("Value") or cookie.get("value")
-    domain = cookie.get("Domain") or cookie.get("domain")
-    path = cookie.get("Path") or cookie.get("path") or "/"
-
-    if name and value:
-        cookie_kwargs = {"path": path or "/"}
-        if domain:
-            cookie_kwargs["domain"] = domain
-        session.cookies.set(name, value, **cookie_kwargs)
-
-    # 2) 优先使用 Stash API Key，避免 Session 过期导致返回登录页 HTML
-    api_key = settings.get("stash_api_key") or ""
-    if api_key:
-        session.headers["ApiKey"] = api_key
-
-    return session
-
-
-def _download_binary(url: str, dst_path: str, settings: Dict[str, Any], detect_ext: bool = False) -> bool:
-    """
-    从 Stash（或其它 HTTP 源）下载二进制文件到指定路径。
-    """
-    if not url:
-        return False
-
-    url = build_absolute_url(url, settings)
-    session = _build_requests_session(settings)
-
-    # 最多重试 3 次
-    max_attempts = 3
-    last_error = None
-
-    for attempt in range(1, max_attempts + 1):
-        try:
-            resp = session.get(url, timeout=30, stream=True)
-            resp.raise_for_status()
-
-            # 默认直接使用调用方给的目标路径
-            final_path = dst_path
-
-            if detect_ext:
-                content_type = (resp.headers.get("Content-Type") or "").lower()
-                guessed_ext = ""
-
-                if "image/" in content_type:
-                    if "jpeg" in content_type or "jpg" in content_type:
-                        guessed_ext = ".jpg"
-                    elif "png" in content_type:
-                        guessed_ext = ".png"
-                    elif "webp" in content_type:
-                        guessed_ext = ".webp"
-                    elif "gif" in content_type:
-                        guessed_ext = ".gif"
-                    elif "svg" in content_type:
-                        guessed_ext = ".svg"
-
-                if not guessed_ext:
-                    try:
-                        parsed = urlparse(resp.url or url)
-                        _, ext_from_url = os.path.splitext(parsed.path)
-                        guessed_ext = ext_from_url
-                    except Exception:
-                        guessed_ext = ""
-
-                # 根据AutoMoveOrganized的做法，固定使用传入的路径，不添加扩展名
-                final_path = dst_path
-
-            os.makedirs(os.path.dirname(final_path), exist_ok=True)
-            with open(final_path, "wb") as f:
-                for chunk in resp.iter_content(chunk_size=8192):
-                    if chunk:
-                        f.write(chunk)
-
-            log.info(f"下载完成 '{url}' -> '{final_path}'")
-            return True
-        except Exception as e:
-            last_error = e
-            log.error(f"下载失败(第{attempt}次) '{url}' -> '{dst_path}': {e}")
-            if attempt < max_attempts:
-                # 简单退避
-                time.sleep(2 * attempt)
-
-    log.error(f"下载失败，已重试 {max_attempts} 次仍失败 '{url}' -> '{dst_path}': {last_error}")
-    return False
 
 
 def write_actor_nfo(actor_dir: str, performer: Dict[str, Any], settings: Dict[str, Any]) -> None:
@@ -418,7 +277,7 @@ def export_actor_data(performer: Dict[str, Any], settings: Dict[str, Any]) -> No
         image_url = performer.get("image_path")
         if settings.get("download_actor_images", True) and image_url:
             dst_path = os.path.join(actor_dir, "folder.jpg")
-            abs_url = build_absolute_url(image_url, settings)
+            abs_url = build_absolute_url(image_url, settings.get("server_connection", {}))
 
             if dry_run:
                 log.info(f"[dry_run] Would download actor image: '{abs_url}' -> '{dst_path}'")
@@ -438,7 +297,7 @@ def export_actor_data(performer: Dict[str, Any], settings: Dict[str, Any]) -> No
                         should_download = True
 
                 if should_download:
-                    success = _download_binary(abs_url, dst_path, settings, detect_ext=False)
+                    success = _download_binary(abs_url, dst_path, settings.get("server_connection", {}), settings.get("stash_api_key", ""), detect_ext=False)
                     if success:
                         log.info(f"Downloaded actor image: '{abs_url}' -> '{dst_path}'")
                     else:
@@ -450,494 +309,29 @@ def export_actor_data(performer: Dict[str, Any], settings: Dict[str, Any]) -> No
 
 
 
-def _upload_image_to_emby(emby_server: str, emby_api_key: str, actor_id: str, img_path: str, name: str, user_id: str = None, sync_mode: int = 1) -> bool:
-    """
-    通用的图片上传函数，供所有同步模式使用
-    """
-    with open(img_path, 'rb') as f:
-        b6_pic = base64.b64encode(f.read())
-
-    # 根据是否有user_id决定使用哪个端点
-    if user_id:
-        upload_url = f'{emby_server}/emby/Users/{user_id}/Items/{actor_id}/Images/Primary?api_key={emby_api_key}'
-    else:
-        upload_url = f'{emby_server}/emby/Items/{actor_id}/Images/Primary?api_key={emby_api_key}'
-
-    headers = {'Content-Type': 'image/jpg'}
-    
-    try:
-        r_upload = requests.post(url=upload_url, data=b6_pic, headers=headers)
-    except requests.exceptions.RequestException as e:
-        log.error(f"上传演员 {name} 头像到Emby时发生网络错误: {e}")
-        return False
-
-    # 如果用户特定端点失败，尝试直接Items端点
-    if r_upload.status_code not in [200, 204] and user_id:
-        log.debug(f"用户特定端点上传图片失败，状态码: {r_upload.status_code}，尝试直接Items端点")
-        upload_url = f'{emby_server}/emby/Items/{actor_id}/Images/Primary?api_key={emby_api_key}'
-        try:
-            r_upload = requests.post(url=upload_url, data=b6_pic, headers=headers)
-        except requests.exceptions.RequestException as e:
-            log.error(f"上传演员 {name} 头像到Emby时发生网络错误: {e}")
-            return False
-
-    if r_upload.status_code in [200, 204]:
-        log.info(f"成功上传演员 {name} 的头像到Emby (模式{sync_mode})")
-        return True
-    else:
-        log.error(f"上传演员 {name} 头像到Emby失败，状态码: {r_upload.status_code}")
-        return False
-
 
 def upload_actor_to_emby(performer: Dict[str, Any], settings: Dict[str, Any]) -> None:
     """
-    将演员信息上传到Emby服务器。
-    """
-    if not settings.get("sync_to_emby", False):
-        return
-
-    emby_server = settings.get("emby_server", "").strip()
-    emby_api_key = settings.get("emby_api_key", "").strip()
-
-    if not emby_server or not emby_api_key:
-        log.error("Emby服务器地址或API密钥未配置，跳过上传")
-        return
-
-    name = performer.get("name")
-    if not name:
-        log.warning("演员没有名称，跳过上传到Emby")
-        return
-
-    try:
-        # 获取演员在Emby中的ID
-        # 首先尝试通过Persons端点获取
-        encoded_name = quote(name)
-        persons_url = f'{emby_server}/emby/Persons/{encoded_name}?api_key={emby_api_key}'
-
-        # 尝试获取演员信息
-        try:
-            r = requests.get(persons_url)
-        except requests.exceptions.RequestException as e:
-            log.error(f"获取演员 {name} 信息时发生网络错误: {e}")
-            return
-
-        if r.status_code == 404:
-            log.info(f"演员 {name} 在Emby Persons 中不存在，跳过上传")
-            return
-        elif r.status_code != 200:
-            log.error(f"获取演员 {name} 信息失败，状态码: {r.status_code}")
-            return
-
-        data = r.json()
-        actor_id = data['Id']
-
-        # 根据同步模式处理
-        sync_mode = settings.get("sync_mode", 1)
-
-        # 模式3：先检查Emby中缺失什么，然后决定上传什么（新模式）
-        if sync_mode == 3:
-            # 检查Emby中是否已有图片和元数据
-            try:
-                # 首先尝试通过Persons端点获取演员信息（这是获取演员信息的标准方法）
-                encoded_name = quote(name)
-                person_url = f"{emby_server}/emby/Persons/{encoded_name}?api_key={emby_api_key}"
-                
-                try:
-                    person_resp = requests.get(person_url)
-                except requests.exceptions.RequestException as e:
-                    log.error(f"获取演员 {name} 信息时发生网络错误: {e}")
-                    return
-
-                if person_resp.status_code == 200:
-                    # 成功获取演员信息，获取ID用于后续操作
-                    try:
-                        person_data = person_resp.json()
-                    except ValueError as e:  # json解析错误
-                        log.error(f"解析演员 {name} 信息JSON时发生错误: {e}")
-                        return
-                    person_id = person_data.get('Id')
-
-                    # 使用Items端点获取更详细的演员信息，包括图片和元数据状态
-                    # 参考emby-toolkit，使用Users/{user_id}/Items/{item_id}端点
-                    # 首先获取用户ID
-                    users_url = f"{emby_server}/emby/Users?api_key={emby_api_key}"
-                    try:
-                        users_response = requests.get(users_url)
-                    except requests.exceptions.RequestException as e:
-                        log.error(f"获取Emby用户列表时发生网络错误: {e}")
-                        return
-                    user_id = None
-                    if users_response.status_code == 200:
-                        try:
-                            users_data = users_response.json()
-                        except ValueError as e:
-                            log.error(f"解析Emby用户列表JSON时发生错误: {e}")
-                            return
-                        if users_data:
-                            user_id = users_data[0]['Id']
-                    
-                    if user_id:
-                        item_detail_url = f"{emby_server}/emby/Users/{user_id}/Items/{person_id}"
-                    else:
-                        # 如果获取不到用户ID，使用通用端点
-                        item_detail_url = f"{emby_server}/emby/Items/{person_id}"
-                    
-                    params = {
-                        "api_key": emby_api_key,
-                        "Fields": "Name,ImageTags,Overview,ProviderIds"
-                    }
-
-                    try:
-                        item_resp = requests.get(item_detail_url, params=params)
-                    except requests.exceptions.RequestException as e:
-                        log.error(f"获取演员 {name} 详细信息时发生网络错误: {e}")
-                        return
-
-                    if item_resp.status_code == 200:
-                        try:
-                            item_data = item_resp.json()
-                        except ValueError as e:
-                            log.error(f"解析演员 {name} 详细信息JSON时发生错误: {e}")
-                            return
-                        
-                        # 检查图片是否缺失
-                        emby_has_image = bool(item_data.get('ImageTags', {}).get('Primary'))
-
-                        # 检查元数据是否缺失（使用Overview作为判断依据）
-                        emby_has_overview = bool(item_data.get('Overview'))
-
-                        log.info(f"演员 {name} 在Emby中的状态: 图片{'已存在' if emby_has_image else '缺失'}, 元数据{'已存在' if emby_has_overview else '缺失'}")
-
-                        # 根据Emby中缺失的内容决定是否上传
-                        should_upload_image = not emby_has_image
-                        should_update_metadata = not emby_has_overview
-
-                        # 处理图片上传
-                        if settings.get("download_actor_images", True) and should_upload_image:
-                            # 模式3：先从Stash下载图片到本地覆盖，然后再上传到Emby
-                            image_url = performer.get("image_path")
-                            if image_url:
-                                # 使用配置的输出目录（与模式1和2一致）
-                                actors_root = settings.get("actor_output_dir", "").strip()
-                                if actors_root:
-                                    safe_name = safe_segment(name)
-                                    img_path = os.path.join(actors_root, safe_name, "folder.jpg")
-                                    
-                                    # 从Stash下载图片到本地（覆盖已有的文件）
-                                    abs_url = build_absolute_url(image_url, settings)
-                                    download_success = _download_binary(abs_url, img_path, settings, detect_ext=False)
-
-                                    if download_success:
-                                        # 使用公共的图片上传函数
-                                        _upload_image_to_emby(emby_server, emby_api_key, person_id, img_path, name, None, sync_mode)
-                                    else:
-                                        log.error(f"无法下载演员 {name} 的图片用于上传到Emby")
-                                else:
-                                    log.info(f"演员 {name} 没有配置输出目录，无法上传图片")
-                            else:
-                                log.info(f"演员 {name} 没有图片URL，无法上传图片")
-
-                        elif not should_upload_image:
-                            log.info(f"演员 {name} 的图片在Emby中已存在，跳过上传 (模式{sync_mode})")
-
-                        # 处理元数据更新
-                        if should_update_metadata:
-                            # 如果导出NFO设置启用，则生成本地NFO文件（覆盖已有的）
-                            if settings.get("export_actor_nfo", True):
-                                actors_root = settings.get("actor_output_dir", "").strip()
-                                if actors_root:
-                                    safe_name = safe_segment(name)
-                                    actor_dir = os.path.join(actors_root, safe_name)
-                                    # 生成NFO文件到本地（覆盖已有的）
-                                    write_actor_nfo(actor_dir, performer, settings)
-                            # 更新Emby元数据（不受导出NFO设置影响）
-                            update_actor_metadata_in_emby(performer, person_id, settings)
-                        else:
-                            log.info(f"演员 {name} 的元数据在Emby中已存在，跳过更新 (模式{sync_mode})")
-                    else:
-                        # 如果通过Items端点获取失败，但Persons端点成功，说明演员存在但获取详细信息失败
-                        log.warning(f"无法获取演员 {name} 的详细信息，但演员存在于Emby中，跳过操作")
-                elif person_resp.status_code == 404:
-                    # 演员在Emby中不存在
-                    log.info(f"在Emby中未找到演员 {name}，跳过上传（模式3只补齐已存在演员的缺失信息）")
-                else:
-                    # 其他错误状态
-                    log.warning(f"查询演员 {name} 在Emby中的状态时出错，状态码: {person_resp.status_code}")
-                    
-                    
-            except Exception as e:
-                log.error(f"检查Emby中演员 {name} 的状态失败: {e}")
-                
-        else:
-            # 模式1和模式2：按原有逻辑处理
-            # 获取用户ID用于上传
-            users_url = f"{emby_server}/emby/Users?api_key={emby_api_key}"
-            try:
-                users_response = requests.get(users_url)
-            except requests.exceptions.RequestException as e:
-                log.error(f"获取Emby用户列表时发生网络错误: {e}")
-                return
-            user_id = None
-            if users_response.status_code == 200:
-                try:
-                    users_data = users_response.json()
-                except ValueError as e:
-                    log.error(f"解析Emby用户列表JSON时发生错误: {e}")
-                    return
-                if users_data:
-                    user_id = users_data[0]['Id']
-
-            # 根据同步模式处理演员图片
-            # 模式2不处理图片，只更新元数据
-            if sync_mode != 2:
-                image_path = performer.get("image_path")
-                if image_path and settings.get("download_actor_images", True):
-                    # 使用配置的输出目录（统一所有模式的处理方式）
-                    actors_root = settings.get("actor_output_dir", "").strip()
-                    if actors_root:
-                        safe_name = safe_segment(name)
-                        img_path = os.path.join(actors_root, safe_name, "folder.jpg")
-
-                        if img_path and os.path.exists(img_path):
-                            should_upload_image = False
-
-                            if sync_mode == 1:  # 模式1：覆盖 - 总是上传
-                                should_upload_image = True
-                            else:  # 模式其他：如果本地文件存在则上传
-                                should_upload_image = True
-
-                            if should_upload_image:
-                                # 使用公共的图片上传函数
-                                _upload_image_to_emby(emby_server, emby_api_key, actor_id, img_path, name, user_id, sync_mode)
-                        else:
-                            log.warning(f"演员 {name} 的图片文件不存在: {img_path}")
-
-            # 模式1（覆盖）、模式2（元数据覆盖）: 更新演员元数据
-            if sync_mode in [1, 2]:
-                update_actor_metadata_in_emby(performer, actor_id, settings)
-
-    except Exception as e:
-        log.error(f"上传演员 {name} 到Emby失败: {e}")
-
-
-def update_actor_metadata_in_emby(performer: Dict[str, Any], actor_id: str, settings: Dict[str, Any]) -> None:
-    """
-    更新Emby中演员的元数据。
+    将演员信息上传到 Emby 服务器（调用 emby_uploader 模块）。
     """
     emby_server = settings.get("emby_server", "").strip()
     emby_api_key = settings.get("emby_api_key", "").strip()
-
-    if not emby_server or not emby_api_key:
-        return
-
-    name = performer.get("name", "")
-    if not name:
-        log.error("演员名称为空，无法更新元数据")
-        return
-
-    # 获取Emby用户ID，用于后续API调用
-    users_url = f"{emby_server}/emby/Users?api_key={emby_api_key}"
-    try:
-        users_response = requests.get(users_url)
-    except requests.exceptions.RequestException as e:
-        log.error(f"获取Emby用户列表时发生网络错误: {e}")
-        return
-    if users_response.status_code != 200:
-        log.error(f"无法获取Emby用户列表，状态码: {users_response.status_code}")
-        return
-
-    try:
-        users_data = users_response.json()
-    except ValueError as e:
-        log.error(f"解析Emby用户列表JSON时发生错误: {e}")
-        return
-    if not users_data:
-        log.error("Emby中没有找到任何用户")
-        return
-
-    user_id = users_data[0]['Id']
-
-    # 直接使用传入的 actor_id，不再重新搜索
-    found_actor_id = actor_id
-    log.info(f"使用传入的ID更新演员 {name} 的元数据，ID: {found_actor_id}")
-
-    # 获取演员完整信息 - 使用传入的ID
-    get_url = f"{emby_server}/emby/Users/{user_id}/Items/{found_actor_id}?api_key={emby_api_key}"
-    try:
-        r_get = requests.get(get_url)
-    except requests.exceptions.RequestException as e:
-        log.error(f"获取演员 {performer.get('name')} 完整信息时发生网络错误: {e}")
-        return
-    if r_get.status_code != 200:
-        log.error(f"无法获取演员 {performer.get('name')} 的完整信息，状态码: {r_get.status_code}")
-        log.debug(f"响应内容: {r_get.text}")
-        return
-    try:
-        person_data = r_get.json()
-    except ValueError as e:
-        log.error(f"解析演员 {performer.get('name')} 完整信息JSON时发生错误: {e}")
-        return
-
-    # 整理元数据
-    from datetime import datetime, timezone
-    lines = []
-    # 最优先的信息
-    if performer.get('disambiguation'):
-        lines.append("消歧义: " + performer['disambiguation'])
-
-    # 优先级较高的信息
-    if performer.get('gender'):
-        # 将英文性别转换为中文
-        gender_map_cn = {
-            'MALE': '男性',
-            'FEMALE': '女性',
-            'TRANSGENDER_MALE': '跨性别男性',
-            'TRANSGENDER_FEMALE': '跨性别女性',
-            'INTERSEX': '间性人',
-            'NON_BINARY': '非二元性别'
-        }
-        gender_cn = gender_map_cn.get(performer['gender'], performer['gender'])  # 如果找不到对应中文，使用原文
-        lines.append("性别: " + gender_cn)
-    if performer.get('country'):
-        lines.append("国家: " + performer["country"])
-    if performer.get('ethnicity'):
-        lines.append("人种: " + performer["ethnicity"])
-    if performer.get('birthdate'):
-        lines.append("出生日期: " + performer["birthdate"])
-    if performer.get('death_date') and performer.get('death_date').strip():
-        lines.append("去世日期: " + performer["death_date"])
-    if performer.get('career_length'):
-        lines.append("职业生涯: " + performer["career_length"])
-    if performer.get('height_cm'):
-        lines.append("身高: " + str(performer["height_cm"]) + " cm")
-    if performer.get('weight'):
-        lines.append("体重: " + str(performer["weight"]) + " kg")
-    if performer.get('measurements'):
-        lines.append("三围尺寸: " + performer["measurements"])
-    if performer.get('fake_tits'):
-        lines.append("假奶: " + performer["fake_tits"])
-    if performer.get('penis_length'):
-        lines.append("阴茎长度: " + str(performer["penis_length"]) + " cm")
-    if performer.get('circumcised'):
-        lines.append("割包皮: " + performer["circumcised"])
-
-    # 其他信息
-    if performer.get('eye_color'):
-        lines.append("瞳孔颜色: " + performer["eye_color"])
-    if performer.get('hair_color'):
-        lines.append("头发颜色: " + performer["hair_color"])
-    if performer.get('tattoos'):
-        lines.append("纹身: " + performer["tattoos"])
-    if performer.get('piercings'):
-        lines.append("穿孔: " + performer["piercings"])
-
-    # 添加别名信息
-    alias_list = performer.get('alias_list', [])
-    if alias_list and isinstance(alias_list, list) and len(alias_list) > 0:
-        aliases_str = " / ".join([alias for alias in alias_list if alias])
-        if aliases_str:
-            lines.append("别名: " + aliases_str)
-
-    # 添加Urls信息
-    urls = performer.get('urls', [])
-    if urls and isinstance(urls, list) and len(urls) > 0:
-        # 只保留非空的URL
-        valid_urls = [url for url in urls if url and isinstance(url, str) and url.strip()]
-        if valid_urls:
-            urls_str = "\n".join(valid_urls)  # 直接列出链接，不加"链接:"前缀
-            lines.append("相关链接:\n" + urls_str)
-
-    if lines:
-        overview = '\n'.join(lines)
-        person_data['Overview'] = overview
-
-    # 更新生日信息
-    if performer.get('birthdate'):
-        birthdate = performer.get("birthdate")
-        if birthdate:
-            try:
-                dt = datetime.strptime(birthdate, "%Y-%m-%d").replace(
-                    hour=0, minute=0, second=0, microsecond=0, tzinfo=timezone.utc
-                )
-                person_data["PremiereDate"] = dt.isoformat(
-                    timespec="milliseconds"
-                ).replace("+00:00", "Z")
-            except Exception:
-                person_data["PremiereDate"] = None
-
-    # 更新死亡日期信息
-    if performer.get('death_date') and performer.get('death_date').strip():
-        deathdate = performer.get("death_date")
-        if deathdate:
-            try:
-                dt = datetime.strptime(deathdate, "%Y-%m-%d").replace(
-                    hour=0, minute=0, second=0, microsecond=0, tzinfo=timezone.utc
-                )
-                person_data["EndDate"] = dt.isoformat(
-                    timespec="milliseconds"
-                ).replace("+00:00", "Z")
-            except Exception:
-                person_data["EndDate"] = None
-
-    country = performer.get("country")
-    if country:
-        person_data["ProductionLocations"] = [country]
-
-    # 添加标签（Tags）
-    tag_items = []
-
-    if performer.get('gender'):
-        # 将英文性别转换为中文
-        gender_map_cn = {
-            'MALE': '男性',
-            'FEMALE': '女性',
-            'TRANSGENDER_MALE': '跨性别男性',
-            'TRANSGENDER_FEMALE': '跨性别女性',
-            'INTERSEX': '间性人',
-            'NON_BINARY': '非二元性别'
-        }
-        gender_cn = gender_map_cn.get(performer['gender'], performer['gender'])  # 如果找不到对应中文，使用原文
-        tag_items.append({"Name": f"性别:{gender_cn}", "Id": None})
-    if performer.get('country'):
-        tag_items.append({"Name": f"国家:{performer['country']}", "Id": None})
-    if performer.get('ethnicity'):
-        tag_items.append({"Name": f"人种:{performer['ethnicity']}", "Id": None})
-    if performer.get('fake_tits'):
-        tag_items.append({"Name": f"假奶:{performer['fake_tits']}", "Id": None})
-    if performer.get('circumcised'):
-        tag_items.append({"Name": f"割包皮:{performer['circumcised']}", "Id": None})
-    if performer.get('hair_color'):
-        tag_items.append({"Name": f"头发颜色:{performer['hair_color']}", "Id": None})
-    if performer.get('height_cm'):
-        tag_items.append({"Name": f"身高:{performer['height_cm']}cm", "Id": None})
-    if performer.get('weight'):
-        tag_items.append({"Name": f"体重:{performer['weight']}kg", "Id": None})
-    if performer.get('penis_length'):
-        tag_items.append({"Name": f"阴茎长度:{performer['penis_length']}cm", "Id": None})
-
-    if tag_items:
-        person_data['TagItems'] = tag_items
-
-    # 添加Stash ID作为外部标识符
-    stash_id = performer.get("id")
-    if stash_id:
-        # 确保ProviderIds字段存在
-        if 'ProviderIds' not in person_data:
-            person_data['ProviderIds'] = {}
-        # 添加Stash ID
-        person_data['ProviderIds']['Stash'] = str(stash_id)
-
-    # 使用POST方法更新到Items端点
-    update_url = f"{emby_server}/emby/Items/{found_actor_id}?api_key={emby_api_key}"
-    try:
-        r2 = requests.post(update_url, json=person_data, headers={"Content-Type": "application/json"})
-        if r2.status_code in [200, 204]:
-            log.info(f"成功更新演员 {performer.get('name')} 的元数据")
-        else:
-            log.error(f"更新演员 {performer.get('name')} 元数据失败，状态码: {r2.status_code}")
-            log.debug(f"响应内容: {r2.text}")
-    except requests.exceptions.RequestException as e:
-        log.error(f"更新演员 {performer.get('name')} 元数据失败: {e}")
+    server_conn = settings.get("server_connection", {})
+    stash_api_key = settings.get("stash_api_key", "")
+    actor_output_dir = settings.get("actor_output_dir", "").strip()
+    sync_mode = settings.get("sync_mode", 1)
+    download_images = settings.get("download_actor_images", True)
+    
+    upload_actor_to_emby(
+        performer=performer,
+        emby_server=emby_server,
+        emby_api_key=emby_api_key,
+        server_conn=server_conn,
+        stash_api_key=stash_api_key,
+        actor_output_dir=actor_output_dir,
+        sync_mode=sync_mode,
+        download_images=download_images
+    )
 
 
 def sync_performer(performer_id: str, settings: Dict[str, Any], stash: StashInterface) -> bool:
