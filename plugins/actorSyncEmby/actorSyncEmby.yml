@@ -36,6 +36,10 @@ settings:
     displayName: 仅模拟
     description: "不真正执行任何文件操作，只输出日志"
     type: BOOLEAN
+  enableWorkerLog:
+    displayName: 启用新建演员异步同步日志
+    description: "是否将新建演员 Hook 触发的后台异步同步脚本日志写入到 actor_sync_worker.log 文件（仅针对 Performer.Create.Post Hook，关闭后日志将完全丢弃，建议测试稳定后关闭）"
+    type: BOOLEAN
 
 exec:
   - python
@@ -53,4 +57,10 @@ hooks:
     description: "在演员更新后自动同步演员信息"
     triggeredBy:
       - Performer.Update.Post
+    defaultArgs: {}
+
+  - name: syncActorOnCreate
+    description: "在演员创建后异步同步演员信息到 Emby（延迟执行），应当马上更新演员首支影片信息以便emby及时刷新演员信息"
+    triggeredBy:
+      - Performer.Create.Post
     defaultArgs: {}

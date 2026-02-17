@@ -416,10 +416,44 @@ def get_all_performers(stash: StashInterface, per_page: int = 1000) -> List[Dict
     return all_performers
 
 
+def start_async_worker(performer_id: int, settings: Dict[str, Any]) -> None:
+    """启动后台工作脚本，异步执行演员同步到 Emby"""
+    import subprocess
+    import base64
+
+    worker_script = os.path.join(os.path.dirname(__file__), "actor_sync_worker.py")
+
+    # 配置通过 base64 编码直接传递给子进程
+    # 新建演员强制使用模式 1（覆盖），不传递 sync_mode，由 worker 使用默认值
+    config = {
+        "emby_server": settings.get("emby_server", ""),
+        "emby_api_key": settings.get("emby_api_key", ""),
+        "stash_api_key": settings.get("stash_api_key", ""),
+        "server_connection": settings.get("server_connection", {}),
+        "actor_output_dir": settings.get("actor_output_dir", ""),
+        "download_actor_images": settings.get("download_actor_images", True),
+        "enable_worker_log": settings.get("enableWorkerLog", True),  # 是否启用日志文件
+        "stash_url": f"http://{settings.get('server_connection', {}).get('Host', 'localhost')}:{settings.get('server_connection', {}).get('Port', '9999')}"
+    }
+
+    config_json = json.dumps(config, ensure_ascii=False)
+    config_b64 = base64.b64encode(config_json.encode('utf-8')).decode('ascii')
+
+    cmd = [sys.executable, worker_script, str(performer_id), config_b64]
+    log.info(f"启动后台工作脚本")
+
+    try:
+        subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                        start_new_session=True)
+        log.info(f"后台工作脚本已启动 (独立进程)")
+    except Exception as e:
+        log.error(f"启动后台工作脚本失败：{e}")
+
+
 def handle_hook_or_task(stash: StashInterface, args: Dict[str, Any], settings: Dict[str, Any]) -> str:
     """
     统一入口：
-    - 如果是 Hook（Performer.Update.Post），处理当前 Performer
+    - 如果是 Hook（Performer.Update.Post / Performer.Create.Post），处理当前 Performer
     - 如果是 Task（手动在 Tasks 页面点执行），可以根据参数处理
     """
     
@@ -429,6 +463,13 @@ def handle_hook_or_task(stash: StashInterface, args: Dict[str, Any], settings: D
 
     if performer_id is not None:
         performer_id = int(performer_id)
+        # 检查是否是 Performer.Create.Post Hook
+        hook_ctx = (args or {}).get("hookContext") or {}
+        if hook_ctx.get("type") == "Performer.Create.Post":
+            log.info(f"[{PLUGIN_ID}] 检测到演员创建 Hook，启动异步同步流程")
+            start_async_worker(performer_id, settings)
+            return f"演员 {performer_id} 创建成功，已启动异步同步流程"
+        
         log.info(f"[{PLUGIN_ID}] Hook mode, processing single performer id={performer_id}")
 
         # Hook模式下强制使用覆盖模式（模式1）
