@@ -2,9 +2,9 @@
 演员同步后台工作脚本 - 异步执行演员同步到 Emby
 
 工作流程:
-1. 等待 40 秒（让 Stash 完成后续操作）
+1. 等待 35 秒（让 Stash 完成后续操作）
 2. 调用 Emby API 刷新媒体库
-3. 等待 60 秒（让 Emby 完成扫描）
+3. 等待 70 秒（让 Emby 完成扫描）
 4. 执行演员上传（图片 + 元数据）
 5. 失败时按指数退避重试（30s → 60s → 90s）
 """
@@ -151,25 +151,29 @@ def get_performer_from_stash(stash_url: str, stash_api_key: str, performer_id: s
 
 def main():
     import base64
-    
+
     if len(sys.argv) < 3:
         log_error("用法：python actor_sync_worker.py <performer_id> <config_base64>")
         sys.exit(1)
-    
+
     performer_id = sys.argv[1]
     config_b64 = sys.argv[2]
-    
-    log_info(f"=== 演员同步工作脚本启动 ===")
-    log_info(f"演员 ID: {performer_id}")
-    
-    # 解码 base64 配置
+
+    # 先解码配置，读取 enable_worker_log 设置
     try:
         config_json = base64.b64decode(config_b64).decode('utf-8')
         config = json.loads(config_json)
     except Exception as e:
         log_error(f"解析配置失败：{e}")
         sys.exit(1)
-    
+
+    # 是否启用日志文件（默认启用）- 在任何日志输出之前设置
+    global _enable_worker_log
+    _enable_worker_log = config.get("enable_worker_log", True)
+
+    log_info(f"=== 演员同步工作脚本启动 ===")
+    log_info(f"演员 ID: {performer_id}")
+
     emby_server = config.get("emby_server", "").strip()
     emby_api_key = config.get("emby_api_key", "").strip()
     stash_api_key = config.get("stash_api_key", "")
@@ -177,11 +181,7 @@ def main():
     actor_output_dir = config.get("actor_output_dir", "").strip()
     download_images = config.get("download_actor_images", True)
     stash_url = config.get("stash_url", "http://localhost:9999")
-    
-    # 是否启用日志文件（默认启用）
-    global _enable_worker_log
-    _enable_worker_log = config.get("enable_worker_log", True)
-    
+
     # 新建演员强制使用模式 1（覆盖）
     sync_mode = 1
     
@@ -199,15 +199,15 @@ def main():
     
     # 阶段 1: 等待
     log_info("【阶段 1/4】等待 Stash 完成后续操作...")
-    time.sleep(40)
-    
+    time.sleep(35)
+
     # 阶段 2: 刷新 Emby
     log_info("【阶段 2/4】刷新 Emby 演员库...")
     refresh_emby_library(emby_server, emby_api_key)
-    
+
     # 阶段 3: 等待 Emby 刷新完成
     log_info("【阶段 3/4】等待 Emby 刷新完成...")
-    time.sleep(60)
+    time.sleep(70)
     
     # 阶段 4: 上传演员信息（带重试）
     log_info("【阶段 4/4】上传演员信息到 Emby...")
