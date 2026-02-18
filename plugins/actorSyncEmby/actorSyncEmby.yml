@@ -1,36 +1,32 @@
 name: actorSyncEmby
-description: "将Stash中的演员信息（图片和NFO文件）导出到指定目录，并可选择性地将这些信息上传到Emby服务器。"
-version: "1.0.2"
+description: "将 Stash 中的演员信息（图片和 NFO 文件）导出到指定目录，并可选择性地将这些信息上传到 Emby 服务器。"
+version: "1.0.6"
 url: https://github.com/mayziran/StashtoEmby/tree/master/plugins/actorSyncEmby
 
 settings:
   actorOutputDir:
     displayName: 演员数据输出目录
-    description: "演员图片和NFO文件将保存到此目录下，例如：/data/actors"
+    description: "演员图片和 NFO 文件将保存到此目录下，例如：/data/actors"
     type: STRING
-  exportActorNfo:
-    displayName: 导出演员NFO
-    description: "导出演员NFO文件到actors目录（即使关闭此选项，元数据仍可通过API直接上传到Emby）"
-    type: BOOLEAN
-  downloadActorImages:
-    displayName: 下载演员图片
-    description: "下载演员图片到actors目录（如果关闭此选项，将不会上传图片到Emby）"
-    type: BOOLEAN
-  syncToEmby:
-    displayName: 同步到Emby
-    description: "将演员信息上传到Emby服务器"
-    type: BOOLEAN
-  syncMode:
-    displayName: 同步模式
-    description: "1-覆盖Emby元数据和图片, 2-覆盖Emby元数据, 3-补齐Emby缺失的数据和图片"
+  exportMode:
+    displayName: 本地导出模式（Task）
+    description: "0-不导出，1-覆盖 (图片+NFO)，2-只 NFO，3-只图片，4-补缺"
+    type: NUMBER
+  uploadMode:
+    displayName: Emby 上传模式（Task）
+    description: "0-不上传，1-覆盖 (图片 + 元数据)，2-只元数据，3-只图片，4-补缺"
+    type: NUMBER
+  hookMode:
+    displayName: Hook 响应模式
+    description: "0-关闭 Hook 响应，1-只输出本地 (覆盖)，2-只上传 Emby(覆盖)，3-同时输出 (覆盖)"
     type: NUMBER
   embyServer:
-    displayName: Emby服务器地址
-    description: "Emby服务器地址，例如：http://192.168.1.100:8096"
+    displayName: Emby 服务器地址
+    description: "Emby 服务器地址，例如：http://192.168.1.100:8096"
     type: STRING
   embyApiKey:
-    displayName: Emby API密钥
-    description: "Emby服务器API密钥"
+    displayName: Emby API 密钥
+    description: "Emby 服务器 API 密钥"
     type: STRING
   dryRun:
     displayName: 仅模拟
@@ -49,7 +45,7 @@ errLog: info
 
 tasks:
   - name: 同步所有演员
-    description: "手动执行：同步所有演员信息到本地和Emby"
+    description: "手动执行：同步所有演员信息到本地和 Emby"
     defaultArgs: {}
 
 hooks:
@@ -60,7 +56,7 @@ hooks:
     defaultArgs: {}
 
   - name: syncActorOnCreate
-    description: "在演员创建后异步同步演员信息到 Emby（延迟执行），应当马上更新演员首支影片信息以便emby及时刷新演员信息"
+    description: "在演员创建后异步同步演员信息到 Emby（延迟执行），应当马上更新演员首支影片信息以便 emby 及时刷新演员信息"
     triggeredBy:
       - Performer.Create.Post
     defaultArgs: {}

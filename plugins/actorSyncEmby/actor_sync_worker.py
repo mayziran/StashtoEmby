@@ -178,12 +178,8 @@ def main():
     emby_api_key = config.get("emby_api_key", "").strip()
     stash_api_key = config.get("stash_api_key", "")
     server_conn = config.get("server_connection", {})
-    actor_output_dir = config.get("actor_output_dir", "").strip()
-    download_images = config.get("download_actor_images", True)
+    upload_mode = config.get("upload_mode", 1)  # 0=不上传，1=覆盖，2=只元数据，3=补齐
     stash_url = config.get("stash_url", "http://localhost:9999")
-
-    # 新建演员强制使用模式 1（覆盖）
-    sync_mode = 1
     
     if not emby_server or not emby_api_key:
         log_error("Emby 服务器地址或 API 密钥未配置")
@@ -241,9 +237,7 @@ def main():
                 emby_api_key=emby_api_key,
                 server_conn=server_conn,
                 stash_api_key=stash_api_key,
-                actor_output_dir=actor_output_dir,
-                sync_mode=sync_mode,
-                download_images=download_images
+                upload_mode=upload_mode
             )
             log_info(f"✓ 演员 {actor_name} 同步完成!")
             sys.exit(0)

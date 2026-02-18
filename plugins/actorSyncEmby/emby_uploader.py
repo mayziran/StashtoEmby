@@ -31,6 +31,162 @@ def safe_segment(segment: str) -> str:
     return segment or "_"
 
 
+def check_emby_missing(performer_name: str, emby_server: str, emby_api_key: str) -> Dict[str, bool]:
+    """
+    检查演员在 Emby 中是否缺失（不需要获取完整演员数据）。
+
+    Args:
+        performer_name: 演员名称
+        emby_server: Emby 服务器地址
+        emby_api_key: Emby API 密钥
+
+    Returns:
+        {"need_image": bool, "need_metadata": bool, "actor_exists": bool}
+    """
+    result = {"need_image": False, "need_metadata": False, "actor_exists": False}
+
+    if not emby_server or not emby_api_key or not performer_name:
+        return result
+
+    try:
+        encoded_name = quote(performer_name)
+        person_url = f"{emby_server}/emby/Persons/{encoded_name}?api_key={emby_api_key}"
+        person_resp = requests.get(person_url, timeout=10)
+
+        if person_resp.status_code == 404:
+            # 演员不存在
+            return result
+
+        if person_resp.status_code != 200:
+            log.warning(f"查询演员 {performer_name} 状态失败：{person_resp.status_code}")
+            return result
+
+        person_data = person_resp.json()
+        person_id = person_data.get('Id')
+
+        if not person_id:
+            return result
+
+        # 获取用户 ID
+        users_url = f"{emby_server}/emby/Users?api_key={emby_api_key}"
+        users_response = requests.get(users_url, timeout=10)
+        user_id = None
+        if users_response.status_code == 200:
+            users_data = users_response.json()
+            if users_data:
+                user_id = users_data[0]['Id']
+
+        # 获取详细信息
+        if user_id:
+            item_detail_url = f"{emby_server}/emby/Users/{user_id}/Items/{person_id}"
+        else:
+            item_detail_url = f"{emby_server}/emby/Items/{person_id}"
+
+        params = {
+            "api_key": emby_api_key,
+            "Fields": "Name,ImageTags,Overview,ProviderIds"
+        }
+
+        item_resp = requests.get(item_detail_url, params=params, timeout=10)
+
+        if item_resp.status_code == 200:
+            item_data = item_resp.json()
+
+            # 检查图片和元数据状态
+            emby_has_image = bool(item_data.get('ImageTags', {}).get('Primary'))
+            emby_has_overview = bool(item_data.get('Overview'))
+
+            result["actor_exists"] = True
+            result["need_image"] = not emby_has_image
+            result["need_metadata"] = not emby_has_overview
+
+    except Exception as e:
+        log.error(f"检查 Emby 中演员 {performer_name} 状态失败：{e}")
+
+    return result
+
+
+def check_emby_missing_batch(performer_names: list, emby_server: str, emby_api_key: str) -> Dict[str, Dict[str, bool]]:
+    """
+    批量检查演员在 Emby 中是否缺失。
+
+    Args:
+        performer_names: 演员名称列表
+        emby_server: Emby 服务器地址
+        emby_api_key: Emby API 密钥
+
+    Returns:
+        {演员名：{"need_image": bool, "need_metadata": bool, "actor_exists": bool}}
+    """
+    results = {}
+    
+    if not emby_server or not emby_api_key or not performer_names:
+        for name in performer_names:
+            results[name] = {"need_image": True, "need_metadata": True, "actor_exists": False}
+        return results
+    
+    # 获取用户 ID（只需要一次）
+    user_id = None
+    try:
+        users_url = f"{emby_server}/emby/Users?api_key={emby_api_key}"
+        users_response = requests.get(users_url, timeout=10)
+        if users_response.status_code == 200:
+            users_data = users_response.json()
+            if users_data:
+                user_id = users_data[0]['Id']
+    except Exception as e:
+        log.error(f"获取 Emby 用户 ID 失败：{e}")
+    
+    # 批量查询演员
+    for name in performer_names:
+        result = {"need_image": True, "need_metadata": True, "actor_exists": False}
+        
+        try:
+            encoded_name = quote(name)
+            person_url = f"{emby_server}/emby/Persons/{encoded_name}?api_key={emby_api_key}"
+            person_resp = requests.get(person_url, timeout=10)
+            
+            if person_resp.status_code != 200:
+                results[name] = result
+                continue
+            
+            person_data = person_resp.json()
+            person_id = person_data.get('Id')
+            
+            if not person_id:
+                results[name] = result
+                continue
+            
+            # 获取详细信息
+            if user_id:
+                item_detail_url = f"{emby_server}/emby/Users/{user_id}/Items/{person_id}"
+            else:
+                item_detail_url = f"{emby_server}/emby/Items/{person_id}"
+            
+            params = {
+                "api_key": emby_api_key,
+                "Fields": "Name,ImageTags,Overview,ProviderIds"
+            }
+            
+            item_resp = requests.get(item_detail_url, params=params, timeout=10)
+            
+            if item_resp.status_code == 200:
+                item_data = item_resp.json()
+                emby_has_image = bool(item_data.get('ImageTags', {}).get('Primary'))
+                emby_has_overview = bool(item_data.get('Overview'))
+                
+                result["actor_exists"] = True
+                result["need_image"] = not emby_has_image
+                result["need_metadata"] = not emby_has_overview
+        
+        except Exception as e:
+            log.error(f"检查 Emby 演员 {name} 失败：{e}")
+        
+        results[name] = result
+    
+    return results
+
+
 def build_absolute_url(url: str, server_conn: Dict[str, Any]) -> str:
     """
     把相对路径补全为带协议/主机的绝对 URL，方便下载图片。
@@ -149,19 +305,23 @@ def _download_binary(url: str, dst_path: str, server_conn: Dict[str, Any], stash
     return False
 
 
-def _upload_image_to_emby(emby_server: str, emby_api_key: str, actor_id: str, img_path: str, name: str, user_id: Optional[str] = None, sync_mode: int = 1) -> bool:
+def _upload_image_to_emby(emby_server: str, emby_api_key: str, actor_id: str, img_path: str, name: str, user_id: Optional[str] = None, sync_mode: int = 1, image_data: Optional[bytes] = None) -> bool:
     """
     通用的图片上传函数，供所有同步模式使用
+
+    Args:
+        img_path: 本地文件路径（如果 image_data 为 None 则使用此参数）
+        image_data: 直接传入图片二进制数据（如果提供则忽略 img_path）
     """
-    with open(img_path, 'rb') as f:
-        b6_pic = base64.b64encode(f.read())
-
-    # 根据是否有 user_id 决定使用哪个端点
-    if user_id:
-        upload_url = f'{emby_server}/emby/Users/{user_id}/Items/{actor_id}/Images/Primary?api_key={emby_api_key}'
+    # 如果提供了 image_data，直接使用；否则从文件读取
+    if image_data is not None:
+        b6_pic = base64.b64encode(image_data)
     else:
-        upload_url = f'{emby_server}/emby/Items/{actor_id}/Images/Primary?api_key={emby_api_key}'
+        with open(img_path, 'rb') as f:
+            b6_pic = base64.b64encode(f.read())
 
+    # Persons（演员）使用直接 Items 端点，不需要 user_id
+    upload_url = f'{emby_server}/emby/Items/{actor_id}/Images/Primary?api_key={emby_api_key}'
     headers = {'Content-Type': 'image/jpg'}
 
     try:
@@ -169,16 +329,6 @@ def _upload_image_to_emby(emby_server: str, emby_api_key: str, actor_id: str, im
     except requests.exceptions.RequestException as e:
         log.error(f"上传演员 {name} 头像到 Emby 时发生网络错误：{e}")
         return False
-
-    # 如果用户特定端点失败，尝试直接 Items 端点
-    if r_upload.status_code not in [200, 204] and user_id:
-        log.info(f"用户特定端点上传图片失败，状态码：{r_upload.status_code}，尝试直接 Items 端点")
-        upload_url = f'{emby_server}/emby/Items/{actor_id}/Images/Primary?api_key={emby_api_key}'
-        try:
-            r_upload = requests.post(url=upload_url, data=b6_pic, headers=headers)
-        except requests.exceptions.RequestException as e:
-            log.error(f"上传演员 {name} 头像到 Emby 时发生网络错误：{e}")
-            return False
 
     if r_upload.status_code in [200, 204]:
         log.info(f"成功上传演员 {name} 的头像到 Emby (模式{sync_mode})")
@@ -406,23 +556,28 @@ def upload_actor_to_emby(
     emby_api_key: str,
     server_conn: Dict[str, Any],
     stash_api_key: str,
-    actor_output_dir: str,
-    sync_mode: int = 1,
-    download_images: bool = True
+    upload_mode: int = 1
 ) -> None:
     """
     将演员信息上传到 Emby 服务器。
-    
+
     Args:
         performer: 演员信息字典
         emby_server: Emby 服务器地址
         emby_api_key: Emby API 密钥
         server_conn: Stash 服务器连接信息
         stash_api_key: Stash API 密钥
-        actor_output_dir: 演员数据输出目录
-        sync_mode: 同步模式 (1=覆盖，2=只元数据，3=补齐缺失)
-        download_images: 是否下载图片
+        upload_mode: 上传模式
+            0 = 不上传 Emby
+            1 = 强制覆盖 (图片 + 元数据)
+            2 = 只上传元数据 (覆盖)
+            3 = 只上传图片 (覆盖)
+            4 = 补缺 Emby (只上传缺失的图片 + 元数据)
     """
+    if upload_mode == 0:
+        log.info("上传模式 0：不上传到 Emby，跳过")
+        return
+        
     if not emby_server or not emby_api_key:
         log.error("Emby 服务器地址或 API 密钥未配置，跳过上传")
         return
@@ -453,8 +608,8 @@ def upload_actor_to_emby(
         data = r.json()
         actor_id = data['Id']
 
-        # 模式 3：先检查 Emby 中缺失什么，然后决定上传什么
-        if sync_mode == 3:
+        # 模式 4：补缺 Emby (先检查 Emby 中缺失什么，然后决定上传什么)
+        if upload_mode == 4:
             try:
                 person_url = f"{emby_server}/emby/Persons/{encoded_name}?api_key={emby_api_key}"
                 person_resp = requests.get(person_url)
@@ -498,35 +653,34 @@ def upload_actor_to_emby(
                         should_update_metadata = not emby_has_overview
 
                         # 处理图片上传
-                        if download_images and should_upload_image:
+                        if should_upload_image:
                             image_url = performer.get("image_path")
-                            if image_url and actor_output_dir:
-                                safe_name = safe_segment(name)
-                                img_path = os.path.join(actor_output_dir, safe_name, "folder.jpg")
+                            if image_url:
                                 abs_url = build_absolute_url(image_url, server_conn)
-                                download_success = _download_binary(abs_url, img_path, server_conn, stash_api_key, detect_ext=False)
-
-                                if download_success:
-                                    _upload_image_to_emby(emby_server, emby_api_key, person_id, img_path, name, None, sync_mode)
-                                else:
-                                    log.error(f"无法下载演员 {name} 的图片用于上传到 Emby")
+                                session = _build_requests_session(server_conn, stash_api_key)
+                                try:
+                                    resp = session.get(abs_url, timeout=30)
+                                    if resp.status_code == 200:
+                                        _upload_image_to_emby(emby_server, emby_api_key, person_id, None, name, sync_mode=upload_mode, image_data=resp.content)
+                                        log.info(f"补缺上传演员 {name} 的图片到 Emby")
+                                    else:
+                                        log.error(f"从 Stash 获取演员 {name} 图片失败，状态码：{resp.status_code}")
+                                except Exception as e:
+                                    log.error(f"获取或上传演员 {name} 图片失败：{e}")
                             else:
-                                if not actor_output_dir:
-                                    log.info(f"演员 {name} 没有配置输出目录，无法上传图片")
-                                if not image_url:
-                                    log.info(f"演员 {name} 没有图片 URL，无法上传图片")
+                                log.info(f"演员 {name} 没有图片 URL，无法上传图片")
                         elif not should_upload_image:
-                            log.info(f"演员 {name} 的图片在 Emby 中已存在，跳过上传 (模式{sync_mode})")
+                            log.info(f"演员 {name} 的图片在 Emby 中已存在，跳过上传 (模式{upload_mode})")
 
                         # 处理元数据更新
                         if should_update_metadata:
                             update_actor_metadata_in_emby(performer, person_id, emby_server, emby_api_key)
                         else:
-                            log.info(f"演员 {name} 的元数据在 Emby 中已存在，跳过更新 (模式{sync_mode})")
+                            log.info(f"演员 {name} 的元数据在 Emby 中已存在，跳过更新 (模式{upload_mode})")
                     else:
                         log.warning(f"无法获取演员 {name} 的详细信息，但演员存在于 Emby 中，跳过操作")
                 elif person_resp.status_code == 404:
-                    log.info(f"在 Emby 中未找到演员 {name}，跳过上传（模式 3 只补齐已存在演员的缺失信息）")
+                    log.info(f"在 Emby 中未找到演员 {name}，跳过上传（模式 4 只补齐已存在演员的缺失信息）")
                 else:
                     log.warning(f"查询演员 {name} 在 Emby 中的状态时出错，状态码：{person_resp.status_code}")
 
@@ -534,42 +688,30 @@ def upload_actor_to_emby(
                 log.error(f"检查 Emby 中演员 {name} 的状态失败：{e}")
 
         else:
-            # 模式 1 和模式 2
-            # 获取用户 ID 用于上传
-            users_url = f"{emby_server}/emby/Users?api_key={emby_api_key}"
-            try:
-                users_response = requests.get(users_url)
-            except requests.exceptions.RequestException as e:
-                log.error(f"获取 Emby 用户列表时发生网络错误：{e}")
-                return
-            user_id = None
-            if users_response.status_code == 200:
-                try:
-                    users_data = users_response.json()
-                except ValueError as e:
-                    log.error(f"解析 Emby 用户列表 JSON 时发生错误：{e}")
-                    return
-                if users_data:
-                    user_id = users_data[0]['Id']
-
-            # 模式 2 不处理图片，只更新元数据
-            if sync_mode != 2:
-                image_path = performer.get("image_path")
-                if image_path and download_images:
-                    if actor_output_dir:
-                        safe_name = safe_segment(name)
-                        img_path = os.path.join(actor_output_dir, safe_name, "folder.jpg")
-
-                        if img_path and os.path.exists(img_path):
-                            should_upload_image = (sync_mode == 1)
-
-                            if should_upload_image:
-                                _upload_image_to_emby(emby_server, emby_api_key, actor_id, img_path, name, user_id, sync_mode)
+            # 模式 1、2、3
+            # 模式 1：覆盖（图片 + 元数据）
+            # 模式 2：只元数据
+            # 模式 3：只图片
+            if upload_mode in [1, 3]:
+                # 直接从 Stash 获取图片并上传到 Emby
+                image_url = performer.get("image_path")
+                if image_url:
+                    abs_url = build_absolute_url(image_url, server_conn)
+                    session = _build_requests_session(server_conn, stash_api_key)
+                    try:
+                        resp = session.get(abs_url, timeout=30)
+                        if resp.status_code == 200:
+                            _upload_image_to_emby(emby_server, emby_api_key, actor_id, None, name, sync_mode=upload_mode, image_data=resp.content)
+                            log.info(f"直接上传演员 {name} 的图片到 Emby")
                         else:
-                            log.warning(f"演员 {name} 的图片文件不存在：{img_path}")
+                            log.error(f"从 Stash 获取演员 {name} 图片失败，状态码：{resp.status_code}")
+                    except Exception as e:
+                        log.error(f"获取或上传演员 {name} 图片失败：{e}")
+                else:
+                    log.info(f"演员 {name} 没有图片 URL，跳过图片上传")
 
             # 模式 1 和 2：更新演员元数据
-            if sync_mode in [1, 2]:
+            if upload_mode in [1, 2]:
                 update_actor_metadata_in_emby(performer, actor_id, emby_server, emby_api_key)
 
     except Exception as e:
