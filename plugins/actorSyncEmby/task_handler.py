@@ -1,9 +1,10 @@
 """
-Task 处理器 - 处理手动执行的任务（同步所有演员）
+Task 处理器 - 手动批量同步所有演员
 
-支持 export_mode 和 upload_mode 的所有模式（0-4）
-
-注意：本模块不从文件导入功能函数，而是从 settings 获取已加载的模块引用。
+支持模式:
+    - export_mode: 0-4（本地导出）
+    - upload_mode: 0-4（Emby 上传）
+    - 4=补缺模式（批量检查缺失，优化 IO）
 """
 
 import os

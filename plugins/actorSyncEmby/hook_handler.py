@@ -1,12 +1,103 @@
 """
-Hook 处理器 - 处理 Performer.Create.Post 和 Performer.Update.Post 事件
+Hook 处理器 - 处理演员创建/更新事件
 
-所有 Hook 操作都使用覆盖模式（export_mode=1, upload_mode=1）
+架构原则:
+    - 本地导出 → 同步执行
+    - Emby 上传 → Create 异步延迟，Update 同步
 
-注意：本模块不从文件导入功能函数，而是从 settings 获取已加载的模块引用。
+Hook 模式 (hook_mode):
+    0=关闭，1=只本地，2=只 Emby，3=本地+Emby
 """
 
-from typing import Any, Dict
+from typing import Any, Dict, Optional
+
+
+def _export_local(performer: Dict[str, Any], settings: Dict[str, Any]) -> bool:
+    """
+    执行本地导出（同步直接执行，无延迟）
+
+    Returns:
+        是否成功
+    """
+    import stashapi.log as log
+
+    local_exporter = settings.get("local_exporter")
+    if not local_exporter:
+        return False
+
+    export_func = local_exporter.get("export_actor_to_local")
+    if not export_func:
+        return False
+
+    try:
+        export_func(
+            performer=performer,
+            actor_output_dir=settings.get("actor_output_dir", ""),
+            export_mode=1,  # 覆盖模式：都导出（NFO+ 图片）
+            server_conn=settings.get("server_connection", {}),
+            stash_api_key=settings.get("stash_api_key", ""),
+            dry_run=settings.get("dry_run", False)
+        )
+        return True
+    except Exception as e:
+        log.error(f"本地导出失败：{e}")
+        return False
+
+
+def _start_emby_async(performer_id: int, settings: Dict[str, Any]) -> bool:
+    """
+    启动 Emby 异步上传（通过 worker，延迟 85 秒后执行）
+
+    Returns:
+        是否成功启动
+    """
+    import stashapi.log as log
+    from actorSyncEmby import start_async_worker
+
+    emby_uploader = settings.get("emby_uploader")
+    if not emby_uploader:
+        return False
+
+    try:
+        upload_settings = dict(settings)
+        upload_settings["upload_mode"] = 1  # 覆盖模式：都上传（图片 + 元数据）
+        start_async_worker(performer_id, upload_settings)
+        return True
+    except Exception as e:
+        log.error(f"启动 Emby 异步上传失败：{e}")
+        return False
+
+
+def _upload_emby_sync(performer: Dict[str, Any], settings: Dict[str, Any]) -> bool:
+    """
+    同步上传 Emby（用于 Update Hook，无延迟）
+
+    Returns:
+        是否成功
+    """
+    import stashapi.log as log
+
+    emby_uploader = settings.get("emby_uploader")
+    if not emby_uploader:
+        return False
+
+    upload_func = emby_uploader.get("upload_actor_to_emby")
+    if not upload_func:
+        return False
+
+    try:
+        upload_func(
+            performer=performer,
+            emby_server=settings.get("emby_server", ""),
+            emby_api_key=settings.get("emby_api_key", ""),
+            server_conn=settings.get("server_connection", {}),
+            stash_api_key=settings.get("stash_api_key", ""),
+            upload_mode=1  # 覆盖模式：都上传（图片 + 元数据）
+        )
+        return True
+    except Exception as e:
+        log.error(f"Emby 同步上传失败：{e}")
+        return False
 
 
 def _process_hook_performer(
@@ -28,7 +119,7 @@ def _process_hook_performer(
         处理结果消息
     """
     import stashapi.log as log
-    from actorSyncEmby import PLUGIN_ID, start_async_worker
+    from actorSyncEmby import PLUGIN_ID
 
     # 获取演员完整数据
     performer = stash.find_performer(performer_id)
@@ -38,89 +129,45 @@ def _process_hook_performer(
         return msg
 
     performer_name = performer.get("name", "Unknown")
-    local_exporter = settings.get("local_exporter")
-    emby_uploader = settings.get("emby_uploader")
     hook_mode = settings.get("hook_mode", 3)
 
-    # hook_mode=0：关闭（应当在调用前判断）
+    # hook_mode=0：关闭
     if hook_mode == 0:
         return "Hook 响应已关闭"
 
-    # hook_mode=1：只输出本地（覆盖模式）
+    # 执行操作
+    is_create = (hook_type == "创建")
+    local_ok = False
+    emby_ok = False
+
+    # hook_mode=1：只本地
     if hook_mode == 1:
-        if local_exporter:
-            export_func = local_exporter.get("export_actor_to_local")
-            if export_func:
-                export_func(
-                    performer=performer,
-                    actor_output_dir=settings.get("actor_output_dir", ""),
-                    export_mode=1,  # 都导出（NFO+ 图片）
-                    server_conn=settings.get("server_connection", {}),
-                    stash_api_key=settings.get("stash_api_key", ""),
-                    dry_run=settings.get("dry_run", False)
-                )
-        msg = f"演员 {performer_name} {hook_type}成功，已导出本地（覆盖模式）"
+        local_ok = _export_local(performer, settings)
+        msg = f"演员 {performer_name} {hook_type}成功，已导出本地"
 
-    # hook_mode=2：只上传 Emby（覆盖模式）
+    # hook_mode=2：只 Emby
     elif hook_mode == 2:
-        # Create Hook 使用异步 worker，Update Hook 使用同步执行
-        if hook_type == "创建":
-            upload_settings = dict(settings)
-            upload_settings["upload_mode"] = 1
-            start_async_worker(performer_id, upload_settings)
-            msg = f"演员 {performer_name} {hook_type}成功，已启动异步上传 Emby（覆盖模式）"
+        if is_create:
+            emby_ok = _start_emby_async(performer_id, settings)
+            msg = f"演员 {performer_name} {hook_type}成功，已启动异步上传 Emby"
         else:
-            if emby_uploader:
-                upload_func = emby_uploader.get("upload_actor_to_emby")
-                if upload_func:
-                    upload_func(
-                        performer=performer,
-                        emby_server=settings.get("emby_server", ""),
-                        emby_api_key=settings.get("emby_api_key", ""),
-                        server_conn=settings.get("server_connection", {}),
-                        stash_api_key=settings.get("stash_api_key", ""),
-                        upload_mode=1  # 都上传（图片 + 元数据）
-                    )
-            msg = f"演员 {performer_name} {hook_type}成功，已上传 Emby（覆盖模式）"
+            emby_ok = _upload_emby_sync(performer, settings)
+            msg = f"演员 {performer_name} {hook_type}成功，已上传 Emby"
 
-    # hook_mode=3：同时输出本地 + Emby（都是覆盖模式）
+    # hook_mode=3：本地 + Emby
     elif hook_mode == 3:
-        if local_exporter:
-            export_func = local_exporter.get("export_actor_to_local")
-            if export_func:
-                export_func(
-                    performer=performer,
-                    actor_output_dir=settings.get("actor_output_dir", ""),
-                    export_mode=1,  # 都导出（NFO+ 图片）
-                    server_conn=settings.get("server_connection", {}),
-                    stash_api_key=settings.get("stash_api_key", ""),
-                    dry_run=settings.get("dry_run", False)
-                )
-        if emby_uploader:
-            # Create Hook 使用异步 worker，Update Hook 使用同步执行
-            if hook_type == "创建":
-                upload_settings = dict(settings)
-                upload_settings["upload_mode"] = 1
-                start_async_worker(performer_id, upload_settings)
-                msg = f"演员 {performer_name} {hook_type}成功，已导出本地并启动异步上传 Emby（覆盖模式）"
-            else:
-                upload_func = emby_uploader.get("upload_actor_to_emby")
-                if upload_func:
-                    upload_func(
-                        performer=performer,
-                        emby_server=settings.get("emby_server", ""),
-                        emby_api_key=settings.get("emby_api_key", ""),
-                        server_conn=settings.get("server_connection", {}),
-                        stash_api_key=settings.get("stash_api_key", ""),
-                        upload_mode=1  # 都上传（图片 + 元数据）
-                    )
-                msg = f"演员 {performer_name} {hook_type}成功，已同步到本地和 Emby（覆盖模式）"
+        local_ok = _export_local(performer, settings)
+        if is_create:
+            emby_ok = _start_emby_async(performer_id, settings)
+            msg = f"演员 {performer_name} {hook_type}成功，已导出本地并启动异步上传 Emby"
         else:
-            msg = f"演员 {performer_name} {hook_type}成功，已导出本地（覆盖模式）"
+            emby_ok = _upload_emby_sync(performer, settings)
+            msg = f"演员 {performer_name} {hook_type}成功，已同步到本地和 Emby"
 
     else:
         msg = f"未知的 hook_mode={hook_mode}"
         log.error(msg)
+        return msg
 
     return msg
 
@@ -136,7 +183,7 @@ def handle_create_hook(
     import stashapi.log as log
     from actorSyncEmby import PLUGIN_ID
 
-    log.info(f"[{PLUGIN_ID}] 检测到演员创建 Hook（固定使用覆盖模式）")
+    log.info(f"[{PLUGIN_ID}] 检测到演员创建 Hook")
     return _process_hook_performer(stash, performer_id, settings, "创建")
 
 
@@ -152,7 +199,7 @@ def handle_update_hook(
     import stashapi.log as log
     from actorSyncEmby import PLUGIN_ID
 
-    log.info(f"[{PLUGIN_ID}] Hook 模式，处理演员更新 (id={performer_id})（固定使用覆盖模式）")
+    log.info(f"[{PLUGIN_ID}] Hook 模式，处理演员更新 (id={performer_id})")
 
     msg = _process_hook_performer(stash, performer_id, settings, "更新")
 

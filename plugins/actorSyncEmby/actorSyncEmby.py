@@ -1,10 +1,7 @@
 """
-演员同步插件 - Stash 插件，用于同步演员信息到 Emby
+演员同步插件 - 将 Stash 演员信息同步到本地和 Emby
 
-将 Stash 中的演员信息（图片和 NFO 文件）导出到指定目录，
-并可选择性地将这些信息上传到 Emby 服务器。
-
-版本：1.0.8 - 重构版（Hook 和 Task 逻辑分离到独立模块）
+版本：1.0.8
 """
 
 import json
@@ -176,7 +173,7 @@ def load_settings(stash: StashInterface, for_hook: bool = False, for_task: bool 
 
 
 def start_async_worker(performer_id: int, settings: Dict[str, Any]) -> None:
-    """启动后台工作脚本，异步执行演员同步到 Emby"""
+    """启动后台 worker，异步上传演员到 Emby（Create Hook 专用）"""
     worker_script = os.path.join(os.path.dirname(__file__), "actor_sync_worker.py")
 
     config = {
@@ -204,13 +201,7 @@ def start_async_worker(performer_id: int, settings: Dict[str, Any]) -> None:
 
 
 def main():
-    """
-    插件主入口
-    
-    运行模式：
-    - Hook 模式：输入包含 hookContext（演员创建/更新事件）
-    - Task 模式：输入不包含 hookContext（手动执行任务）
-    """
+    """插件主入口：Hook 模式（演员事件）或 Task 模式（批量同步）"""
     json_input = read_input()
     log.info(f"[{PLUGIN_ID}] 插件启动")
     
