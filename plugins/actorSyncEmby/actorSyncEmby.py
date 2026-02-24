@@ -59,9 +59,14 @@ def connect_stash(server_connection: Dict[str, Any]) -> StashInterface:
     return StashInterface(server_connection)
 
 
-def load_settings(stash: StashInterface) -> Dict[str, Any]:
+def load_settings(stash: StashInterface, for_hook: bool = False, for_task: bool = False) -> Dict[str, Any]:
     """
     从 Stash 配置里读取本插件的 settings，并根据模式导入对应模块。
+    
+    Args:
+        stash: Stash 接口
+        for_hook: 是否为 Hook 模式加载（只根据 hook_mode 判断）
+        for_task: 是否为 Task 模式加载（只根据 export_mode/upload_mode 判断）
     """
     try:
         cfg = stash.get_configuration()
@@ -69,9 +74,9 @@ def load_settings(stash: StashInterface) -> Dict[str, Any]:
         log.error(f"get_configuration failed: {e}")
         return {
             "actor_output_dir": "",
-            "export_mode": 3,
-            "upload_mode": 1,
-            "hook_mode": 3,
+            "export_mode": 0,
+            "upload_mode": 0,
+            "hook_mode": 0,
             "emby_server": "",
             "emby_api_key": "",
             "dry_run": False,
@@ -89,9 +94,9 @@ def load_settings(stash: StashInterface) -> Dict[str, Any]:
         return v
 
     actor_output_dir = _get_val("actorOutputDir", "")
-    export_mode = int(_get_val("exportMode", 1))
-    upload_mode = int(_get_val("uploadMode", 1))
-    hook_mode = int(_get_val("hookMode", 3))
+    export_mode = int(_get_val("exportMode", 0))
+    upload_mode = int(_get_val("uploadMode", 0))
+    hook_mode = int(_get_val("hookMode", 0))
     emby_server = _get_val("embyServer", "")
     emby_api_key = _get_val("embyApiKey", "")
     dry_run = bool(_get_val("dryRun", False))
@@ -100,61 +105,59 @@ def load_settings(stash: StashInterface) -> Dict[str, Any]:
     log.info(
         f"Loaded settings: actor_output_dir='{actor_output_dir}', "
         f"export_mode={export_mode} (Task), upload_mode={upload_mode} (Task), "
-        f"hook_mode={hook_mode} (0=关闭，1=只本地，2=只 Emby，3=同时), "
+        f"hook_mode={hook_mode} (Hook), "
         f"emby_server='{emby_server}', dry_run={dry_run}"
     )
 
-    # 根据模式导入模块
+    # 根据调用目的决定加载哪些模块
     local_exporter = None
     emby_uploader = None
 
-    # ========== 加载 local_exporter 模块 ==========
-    # Task 模式：export_mode != 0 时需要
-    # Hook 模式：hook_mode in (1, 3) 时需要
-    need_local_for_task = (export_mode != 0)
-    need_local_for_hook = (hook_mode in (1, 3))
-    
-    if need_local_for_task or need_local_for_hook:
-        try:
-            from local_exporter import export_actor_to_local as local_export
-            local_exporter = {"export_actor_to_local": local_export}
-            log.info(f"[{PLUGIN_ID}] 已加载 local_exporter.export_actor_to_local")
-        except Exception as e:
-            log.error(f"加载 local_exporter 模块失败：{e}")
-        
-        # 补缺模式需要批量检查函数
-        if export_mode == 4:
-            try:
-                from local_exporter import check_local_missing_batch as local_check
-                local_exporter["check_local_missing_batch"] = local_check
-                log.info(f"[{PLUGIN_ID}] 已加载 local_exporter.check_local_missing_batch")
-            except Exception as e:
-                log.error(f"加载 check_local_missing_batch 失败：{e}")
+    if for_hook:
+        # ========== Hook 模式：只看 hook_mode ==========
+        # hook_mode: 0=关闭，1=只本地，2=只 Emby，3=同时
+        need_local = (hook_mode in (1, 3))
+        need_emby = (hook_mode in (2, 3))
 
-    # ========== 加载 emby_uploader 模块 ==========
-    # Task 模式：upload_mode != 0 时需要
-    # Hook 模式：hook_mode in (2, 3) 时需要
-    need_emby_for_task = (upload_mode != 0)
-    need_emby_for_hook = (hook_mode in (2, 3))
-    
-    if need_emby_for_task or need_emby_for_hook:
-        try:
-            from emby_uploader import upload_actor_to_emby as emby_upload
-            emby_uploader = {"upload_actor_to_emby": emby_upload}
-            log.info(f"[{PLUGIN_ID}] 已加载 emby_uploader.upload_actor_to_emby")
-        except Exception as e:
-            log.error(f"加载 emby_uploader 模块失败：{e}")
-        
-        # 补缺模式需要批量检查函数
-        if upload_mode == 4:
+        if need_local:
             try:
-                from emby_uploader import check_emby_missing_batch as emby_check
-                emby_uploader["check_emby_missing_batch"] = emby_check
-                log.info(f"[{PLUGIN_ID}] 已加载 emby_uploader.check_emby_missing_batch")
+                from local_exporter import export_actor_to_local as local_export
+                local_exporter = {"export_actor_to_local": local_export}
+                log.info(f"[{PLUGIN_ID}] 已加载 local_exporter (Hook)")
             except Exception as e:
-                log.error(f"加载 check_emby_missing_batch 失败：{e}")
+                log.error(f"加载 local_exporter 失败：{e}")
 
-    # ========== 日志：模块加载情况 ==========
+        if need_emby:
+            try:
+                from emby_uploader import upload_actor_to_emby as emby_upload
+                emby_uploader = {"upload_actor_to_emby": emby_upload}
+                log.info(f"[{PLUGIN_ID}] 已加载 emby_uploader (Hook)")
+            except Exception as e:
+                log.error(f"加载 emby_uploader 失败：{e}")
+
+    elif for_task:
+        # ========== Task 模式：只看 export_mode/upload_mode ==========
+        # export_mode/upload_mode: 0=不执行，1-3=覆盖/只 NFO/只图片，4=补缺
+        need_local = (export_mode != 0)
+        need_emby = (upload_mode != 0)
+
+        if need_local:
+            try:
+                from local_exporter import export_actor_to_local as local_export
+                local_exporter = {"export_actor_to_local": local_export}
+                log.info(f"[{PLUGIN_ID}] 已加载 local_exporter (Task)")
+            except Exception as e:
+                log.error(f"加载 local_exporter 失败：{e}")
+
+        if need_emby:
+            try:
+                from emby_uploader import upload_actor_to_emby as emby_upload
+                emby_uploader = {"upload_actor_to_emby": emby_upload}
+                log.info(f"[{PLUGIN_ID}] 已加载 emby_uploader (Task)")
+            except Exception as e:
+                log.error(f"加载 emby_uploader 失败：{e}")
+
+    # 日志：模块加载情况
     if local_exporter is None and emby_uploader is None:
         log.warning(f"[{PLUGIN_ID}] 警告：没有加载任何模块（export_mode={export_mode}, upload_mode={upload_mode}, hook_mode={hook_mode}）")
 
@@ -190,92 +193,28 @@ def start_async_worker(performer_id: int, settings: Dict[str, Any]) -> None:
     config_b64 = base64.b64encode(config_json.encode('utf-8')).decode('ascii')
 
     cmd = [sys.executable, worker_script, str(performer_id), config_b64]
-    log.info(f"启动后台工作脚本")
+    log.info(f"[{PLUGIN_ID}] 启动后台工作脚本")
 
     try:
         subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                         start_new_session=True)
-        log.info(f"后台工作脚本已启动 (独立进程)")
+        log.info(f"[{PLUGIN_ID}] 后台工作脚本已启动 (独立进程)")
     except Exception as e:
-        log.error(f"启动后台工作脚本失败：{e}")
-
-
-def sync_performer(performer: Dict[str, Any], settings: Dict[str, Any], stash: StashInterface) -> bool:
-    """
-    同步单个演员到本地和 Emby（用于 Task 模式 1/2/3）。
-    """
-    performer_id = performer.get("id")
-    log.info(f"正在同步演员 ID: {performer_id}")
-
-    export_mode = settings.get("export_mode", 1)
-    upload_mode = settings.get("upload_mode", 1)
-
-    try:
-        if export_mode != 0:
-            local_exporter = settings.get("local_exporter")
-            if local_exporter:
-                export_func = local_exporter.get("export_actor_to_local")
-                if export_func:
-                    export_func(
-                        performer=performer,
-                        actor_output_dir=settings.get("actor_output_dir", ""),
-                        export_mode=export_mode,
-                        server_conn=settings.get("server_connection", {}),
-                        stash_api_key=settings.get("stash_api_key", ""),
-                        dry_run=settings.get("dry_run", False)
-                    )
-
-        if upload_mode != 0:
-            from emby_uploader import upload_actor_to_emby
-            upload_actor_to_emby(
-                performer=performer,
-                emby_server=settings.get("emby_server", ""),
-                emby_api_key=settings.get("emby_api_key", ""),
-                server_conn=settings.get("server_connection", {}),
-                stash_api_key=settings.get("stash_api_key", ""),
-                upload_mode=upload_mode
-            )
-
-        log.info(f"成功同步演员 {performer_id}")
-        return True
-    except Exception as e:
-        log.error(f"同步演员 {performer_id} 失败：{e}")
-        return False
-
-
-def handle_hook_or_task(stash: StashInterface, args: Dict[str, Any], settings: Dict[str, Any]) -> str:
-    """
-    统一入口：
-    - Hook：调用 hook_handler 模块
-    - Task：调用 task_handler 模块
-    """
-    from hook_handler import handle_create_hook, handle_update_hook
-    from task_handler import handle_task
-
-    hook_ctx = (args or {}).get("hookContext") or {}
-    performer_id = hook_ctx.get("id") or hook_ctx.get("performer_id")
-
-    if performer_id is not None:
-        performer_id = int(performer_id)
-        hook_mode = settings.get("hook_mode", 3)
-
-        if hook_mode == 0:
-            log.info(f"[{PLUGIN_ID}] hook_mode=0，跳过 Hook 响应")
-            return "Hook 响应已关闭"
-
-        if hook_ctx.get("type") == "Performer.Create.Post":
-            return handle_create_hook(stash, performer_id, settings)
-
-        return handle_update_hook(stash, performer_id, settings, task_log)
-
-    return handle_task(stash, settings, task_log)
+        log.error(f"[{PLUGIN_ID}] 启动后台工作脚本失败：{e}")
 
 
 def main():
+    """
+    插件主入口
+    
+    运行模式：
+    - Hook 模式：输入包含 hookContext（演员创建/更新事件）
+    - Task 模式：输入不包含 hookContext（手动执行任务）
+    """
     json_input = read_input()
-    log.info(f"Plugin input: {json_input}")
+    log.info(f"[{PLUGIN_ID}] 插件启动")
+    
     server_conn = json_input.get("server_connection") or {}
-
     if not server_conn:
         out = {"error": "Missing server_connection in input"}
         print(json.dumps(out))
@@ -284,24 +223,64 @@ def main():
     if server_conn.get("Host") == '0.0.0.0':
         server_conn["Host"] = "localhost"
 
-    args = json_input.get("args") or {}
-
+    # 连接 Stash
     stash = connect_stash(server_conn)
-    settings = load_settings(stash)
-    settings["server_connection"] = server_conn
 
+    # 获取 Stash API Key
     try:
         cfg = stash.get_configuration()
         stash_api_key = cfg.get("general", {}).get("apiKey") or ""
-        settings["stash_api_key"] = stash_api_key
     except Exception as e:
-        log.error(f"获取 stash 配置失败：{e}")
+        log.error(f"[{PLUGIN_ID}] 获取 stash 配置失败：{e}")
+        stash_api_key = ""
+
+    # 判断运行模式：直接从 Task 或 Hook 触发
+    args = json_input.get("args") or {}
+    hook_ctx = args.get("hookContext")
+
+    # 导入处理器模块
+    from hook_handler import handle_create_hook, handle_update_hook
+    from task_handler import handle_task
 
     try:
-        msg = handle_hook_or_task(stash, args, settings)
+        if hook_ctx:
+            # ========== Hook 模式：演员创建/更新事件 ==========
+            performer_id = int(hook_ctx.get("id", 0))
+            hook_type = hook_ctx.get("type", "")
+
+            # 为 Hook 加载模块（只看 hook_mode）
+            settings = load_settings(stash, for_hook=True)
+            settings["server_connection"] = server_conn
+            settings["stash_api_key"] = stash_api_key
+
+            hook_mode = settings.get("hook_mode", 0)
+
+            if hook_mode == 0:
+                log.info(f"[{PLUGIN_ID}] hook_mode=0，跳过 Hook 响应")
+                msg = "Hook 响应已关闭"
+            elif hook_type == "Performer.Create.Post":
+                log.info(f"[{PLUGIN_ID}] Hook 模式：演员创建 (id={performer_id})")
+                msg = handle_create_hook(stash, performer_id, settings)
+            elif hook_type == "Performer.Update.Post":
+                log.info(f"[{PLUGIN_ID}] Hook 模式：演员更新 (id={performer_id})")
+                msg = handle_update_hook(stash, performer_id, settings, task_log)
+            else:
+                log.warning(f"[{PLUGIN_ID}] 未知的 Hook 类型：{hook_type}")
+                msg = f"未知的 Hook 类型：{hook_type}"
+        else:
+            # ========== Task 模式：手动执行批量任务 ==========
+            log.info(f"[{PLUGIN_ID}] Task 模式：同步所有演员")
+            
+            # 为 Task 加载模块（只看 export_mode/upload_mode）
+            settings = load_settings(stash, for_task=True)
+            settings["server_connection"] = server_conn
+            settings["stash_api_key"] = stash_api_key
+            
+            msg = handle_task(stash, settings, task_log)
+        
         out = {"output": msg, "progress": 1.0}
     except Exception as e:
-        log.error(f"Plugin execution failed: {e}")
+        log.error(f"[{PLUGIN_ID}] 执行失败：{e}")
         out = {"error": str(e)}
 
     print(json.dumps(out) + "\n")

@@ -6,9 +6,303 @@ Task 处理器 - 处理手动执行的任务（同步所有演员）
 注意：本模块不从文件导入功能函数，而是从 settings 获取已加载的模块引用。
 """
 
-from typing import Any, Dict, List
+import os
+import re
+from typing import Any, Dict, List, Tuple
+from urllib.parse import quote
 
+import requests
 import stashapi.log as log
+
+
+def _safe_segment(segment: str) -> str:
+    """清理路径段，避免出现奇怪字符。"""
+    segment = segment.strip().replace("\\", "_").replace("/", "_")
+    segment = re.sub(r'[<>:"|?*]', "_", segment)
+    return segment or "_"
+
+
+def _check_local_missing_batch(performer_names: list, actor_output_dir: str) -> Dict[str, Dict[str, bool]]:
+    """
+    批量检查演员本地文件是否缺失（只读取一次磁盘目录）。
+
+    Args:
+        performer_names: 演员名称列表
+        actor_output_dir: 演员输出根目录
+
+    Returns:
+        {演员名：{"need_nfo": bool, "need_image": bool}}
+    """
+    results = {}
+
+    if not actor_output_dir or not performer_names:
+        for name in performer_names:
+            results[name] = {"need_nfo": True, "need_image": True}
+        return results
+
+    # 第 1 步：一次性读取所有本地目录（只读 1 次磁盘）
+    existing_dirs = {}
+    if os.path.exists(actor_output_dir):
+        try:
+            for dir_name in os.listdir(actor_output_dir):
+                actor_dir = os.path.join(actor_output_dir, dir_name)
+                if os.path.isdir(actor_dir):
+                    files = os.listdir(actor_dir)
+                    existing_dirs[dir_name] = {
+                        "has_nfo": "actor.nfo" in files,
+                        "has_image": any(f in files for f in ["folder.jpg", "poster.jpg"])
+                    }
+        except Exception as e:
+            log.error(f"读取本地目录失败：{e}")
+
+    # 第 2 步：内存比对（不读磁盘）
+    for name in performer_names:
+        safe_name = _safe_segment(name)
+        if safe_name in existing_dirs:
+            dir_info = existing_dirs[safe_name]
+            results[name] = {
+                "need_nfo": not dir_info["has_nfo"],
+                "need_image": not dir_info["has_image"]
+            }
+        else:
+            results[name] = {"need_nfo": True, "need_image": True}
+
+    return results
+
+
+def _check_emby_missing_batch(performer_names: list, emby_server: str, emby_api_key: str) -> Dict[str, Dict[str, bool]]:
+    """
+    批量检查演员在 Emby 中是否缺失。
+
+    Args:
+        performer_names: 演员名称列表
+        emby_server: Emby 服务器地址
+        emby_api_key: Emby API 密钥
+
+    Returns:
+        {演员名：{"need_image": bool, "need_metadata": bool, "actor_exists": bool}}
+    """
+    results = {}
+
+    if not emby_server or not emby_api_key or not performer_names:
+        for name in performer_names:
+            results[name] = {"need_image": True, "need_metadata": True, "actor_exists": False}
+        return results
+
+    # 获取用户 ID（只需要一次）
+    user_id = None
+    try:
+        users_url = f"{emby_server}/emby/Users?api_key={emby_api_key}"
+        users_response = requests.get(users_url, timeout=10)
+        if users_response.status_code == 200:
+            users_data = users_response.json()
+            if users_data:
+                user_id = users_data[0]['Id']
+    except Exception as e:
+        log.error(f"获取 Emby 用户 ID 失败：{e}")
+
+    # 批量查询演员
+    for name in performer_names:
+        result = {"need_image": True, "need_metadata": True, "actor_exists": False}
+
+        try:
+            encoded_name = quote(name)
+            person_url = f"{emby_server}/emby/Persons/{encoded_name}?api_key={emby_api_key}"
+            person_resp = requests.get(person_url, timeout=10)
+
+            if person_resp.status_code != 200:
+                results[name] = result
+                continue
+
+            person_data = person_resp.json()
+            person_id = person_data.get('Id')
+
+            if not person_id:
+                results[name] = result
+                continue
+
+            # 获取详细信息
+            if user_id:
+                item_detail_url = f"{emby_server}/emby/Users/{user_id}/Items/{person_id}"
+            else:
+                item_detail_url = f"{emby_server}/emby/Items/{person_id}"
+
+            params = {
+                "api_key": emby_api_key,
+                "Fields": "Name,ImageTags,Overview,ProviderIds"
+            }
+
+            item_resp = requests.get(item_detail_url, params=params, timeout=10)
+
+            if item_resp.status_code == 200:
+                item_data = item_resp.json()
+                emby_has_image = bool(item_data.get('ImageTags', {}).get('Primary'))
+                emby_has_overview = bool(item_data.get('Overview'))
+
+                result["actor_exists"] = True
+                result["need_image"] = not emby_has_image
+                result["need_metadata"] = not emby_has_overview
+
+        except Exception as e:
+            log.error(f"检查 Emby 演员 {name} 失败：{e}")
+
+        results[name] = result
+
+    return results
+
+
+def _get_local_need(
+    export_mode: int,
+    performer_name: str,
+    local_cache: Dict[str, Any]
+) -> Tuple[bool, bool, bool]:
+    """
+    判断是否需要处理本地导出。
+
+    Args:
+        export_mode: 导出模式 (0-4)
+        performer_name: 演员名称
+        local_cache: 本地缺失检查结果缓存
+
+    Returns:
+        (need_local, need_nfo, need_image)
+    """
+    if export_mode == 0:
+        return False, False, False
+    elif export_mode == 1:  # 覆盖：图片 +NFO 都处理
+        return True, True, True
+    elif export_mode == 2:  # 只 NFO 模式
+        return True, True, False
+    elif export_mode == 3:  # 只图片模式
+        return True, False, True
+    elif export_mode == 4:  # 补缺模式
+        if performer_name in local_cache:
+            status = local_cache[performer_name]
+            need_nfo = status["need_nfo"]
+            need_image = status["need_image"]
+            return need_nfo or need_image, need_nfo, need_image
+    return False, False, False
+
+
+def _get_emby_need(
+    upload_mode: int,
+    performer_name: str,
+    emby_cache: Dict[str, Any]
+) -> Tuple[bool, bool, bool]:
+    """
+    判断是否需要处理 Emby 上传。
+
+    Args:
+        upload_mode: 上传模式 (0-4)
+        performer_name: 演员名称
+        emby_cache: Emby 缺失检查结果缓存
+
+    Returns:
+        (need_emby, need_image, need_metadata)
+    """
+    if upload_mode == 0:
+        return False, False, False
+    elif upload_mode == 1:  # 覆盖：图片 + 元数据都处理
+        return True, True, True
+    elif upload_mode == 2:  # 只元数据模式
+        return True, False, True
+    elif upload_mode == 3:  # 只图片模式
+        return True, True, False
+    elif upload_mode == 4:  # 补缺模式
+        if performer_name in emby_cache:
+            status = emby_cache[performer_name]
+            need_image = status["need_image"]
+            need_metadata = status["need_metadata"]
+            return need_image or need_metadata, need_image, need_metadata
+    return False, False, False
+
+
+def _process_performer(
+    performer: Dict[str, Any],
+    export_mode: int,
+    upload_mode: int,
+    local_cache: Dict[str, Any],
+    emby_cache: Dict[str, Any],
+    local_exporter: Dict[str, Any],
+    emby_uploader: Dict[str, Any],
+    settings: Dict[str, Any]
+) -> Tuple[bool, bool, bool, bool]:
+    """
+    处理单个演员的导出和上传。
+
+    Args:
+        performer: 演员信息
+        export_mode: 导出模式
+        upload_mode: 上传模式
+        local_cache: 本地缺失缓存
+        emby_cache: Emby 缺失缓存
+        local_exporter: 本地导出模块
+        emby_uploader: Emby 上传模块
+        settings: 配置参数
+
+    Returns:
+        (need_local, need_emby, local_success, emby_success)
+    """
+    performer_name = performer.get("name")
+    if not performer_name:
+        return False, False, True, True
+
+    # 判断需求
+    need_local, need_nfo, need_image = _get_local_need(export_mode, performer_name, local_cache)
+    need_emby, need_emby_image, need_emby_metadata = _get_emby_need(upload_mode, performer_name, emby_cache)
+
+    if not need_local and not need_emby:
+        return need_local, need_emby, True, True
+
+    # 默认成功（不需要处理也算成功）
+    local_success = not need_local
+    emby_success = not need_emby
+
+    # 导出本地
+    if need_local and local_exporter:
+        export_func = local_exporter.get("export_actor_to_local")
+        if export_func:
+            try:
+                export_func(
+                    performer=performer,
+                    actor_output_dir=settings.get("actor_output_dir", ""),
+                    export_mode=export_mode,
+                    server_conn=settings.get("server_connection", {}),
+                    stash_api_key=settings.get("stash_api_key", ""),
+                    dry_run=settings.get("dry_run", False),
+                    need_nfo=need_nfo,
+                    need_image=need_image
+                )
+                local_success = True
+            except Exception as e:
+                log.error(f"[{PLUGIN_ID}] 演员 {performer_name}：本地导出失败：{e}")
+                local_success = False
+
+    # 上传 Emby
+    if need_emby and emby_uploader:
+        upload_func = emby_uploader.get("upload_actor_to_emby")
+        if upload_func:
+            try:
+                upload_func(
+                    performer=performer,
+                    emby_server=settings.get("emby_server", ""),
+                    emby_api_key=settings.get("emby_api_key", ""),
+                    server_conn=settings.get("server_connection", {}),
+                    stash_api_key=settings.get("stash_api_key", ""),
+                    upload_mode=upload_mode,
+                    need_image=need_emby_image,
+                    need_metadata=need_emby_metadata
+                )
+                emby_success = True
+            except Exception as e:
+                log.error(f"[{PLUGIN_ID}] 演员 {performer_name}：Emby 上传失败：{e}")
+                emby_success = False
+
+    return need_local, need_emby, local_success, emby_success
+
+
+# 在模块级别定义 PLUGIN_ID，供 _process_performer 使用
+PLUGIN_ID = "actorSyncEmby"
 
 
 def handle_task(
@@ -18,313 +312,248 @@ def handle_task(
 ) -> str:
     """
     处理 Task 任务（同步所有演员）
-    
+
     Args:
         stash: Stash 连接
         settings: 配置参数（包含已加载的模块引用）
         task_log_func: Task 日志函数
-    
+
     Returns:
         处理结果消息
     """
-    from actorSyncEmby import PLUGIN_ID
-    
+    global PLUGIN_ID
+
     export_mode = settings.get("export_mode", 1)
     upload_mode = settings.get("upload_mode", 1)
-    
-    log.info(f"[{PLUGIN_ID}] Task 模式：export_mode={export_mode}, upload_mode={upload_mode}")
-    task_log_func(f"[Task] 处理所有演员 (dry_run={settings.get('dry_run', False)})", progress=0.0)
-    
-    # 只有纯补缺模式（44、40、04）才使用批量检查
+
+    # 简洁的启动日志
+    mode_names = {0: "关闭", 1: "覆盖", 2: "只元数据", 3: "只图片", 4: "补缺"}
+    local_mode = mode_names.get(export_mode, str(export_mode))
+    emby_mode = mode_names.get(upload_mode, str(upload_mode))
+
+    log.info(f"[{PLUGIN_ID}] Task 模式启动：本地{local_mode} + Emby{emby_mode}")
+    task_log_func(f"开始处理演员 (本地={local_mode}, Emby={emby_mode})", progress=0.0)
+
+    # 判断是否使用批量检查（先获取名称→检查缺失→只获取缺失演员完整数据）
+    # 只有双方都是补缺模式（04/40/44）时才使用，因为不需要获取完整数据
     use_batch_check = (export_mode == 4 and upload_mode == 4) or \
                       (export_mode == 4 and upload_mode == 0) or \
                       (export_mode == 0 and upload_mode == 4)
-    
-    per_page = 1000  # 每批处理 1000 个演员
+
+    per_page = 1000
     page = 1
-    total_processed = 0
-    total_success = 0
-    total_skip = 0
-    
-    # 批量检查缓存
+
+    # 统计信息
+    total_actors = 0
+    actors_processed = 0
+    actors_skipped = 0
+    local_ok_count = 0
+    local_fail_count = 0
+    emby_ok_count = 0
+    emby_fail_count = 0
+
+    # 缓存
     local_missing_cache = {}
     emby_missing_cache = {}
-    
+
     # 从 settings 获取已加载的模块
     local_exporter = settings.get("local_exporter")
     emby_uploader = settings.get("emby_uploader")
-    
+
+    # 定义字段模板
+    FULL_FRAGMENT = """
+        id name image_path gender country birthdate height_cm measurements
+        fake_tits disambiguation details ethnicity eye_color hair_color
+        career_length tattoos piercings weight death_date circumcised
+        penis_length alias_list urls
+    """
+    BASIC_FRAGMENT = "id\nname"
+
+    # 根据模式决定获取哪些字段
+    fragment = BASIC_FRAGMENT if use_batch_check else FULL_FRAGMENT
+
     while True:
-        # 第 1 步：先获取当前页演员的名称（只 id+name，用于检查缺失）
-        log.info(f"[{PLUGIN_ID}] Fetching performers page={page}, per_page={per_page}")
-        
+        # 第 1 步：获取当前页演员数据
         try:
-            page_performers_basic = stash.find_performers(
+            page_performers = stash.find_performers(
                 f=None,
                 filter={"page": page, "per_page": per_page},
-                fragment="id\nname",
+                fragment=fragment,
             )
         except Exception as e:
             log.error(f"获取演员列表失败：{e}")
             break
-        
-        if not page_performers_basic:
-            log.info(f"[{PLUGIN_ID}] No more performers at page={page}, stop paging")
+
+        if not page_performers:
             break
-        
-        log.info(f"[{PLUGIN_ID}] Got {len(page_performers_basic)} performers in page={page}")
-        
-        # 第 2 步：批量检查缺失（只使用名称，不需要完整数据）
+
+        page_total = len(page_performers)
+
+        # 第 2 步：批量检查缺失（只在批量检查模式下使用）
         if use_batch_check:
-            performer_names = [p.get("name") for p in page_performers_basic if p.get("name")]
-            
-            # 批量检查本地缺失（只检查一次，缓存复用）
+            performer_names = [p.get("name") for p in page_performers if p.get("name")]
+
             if export_mode == 4 and local_exporter:
-                check_local = local_exporter.get("check_local_missing_batch")
-                if check_local and not local_missing_cache:
-                    log.info(f"[{PLUGIN_ID}] 批量检查本地缺失...")
-                    local_missing_cache = check_local(performer_names, settings.get("actor_output_dir", ""))
-                    log.info(f"[{PLUGIN_ID}] 本地缺失检查结果：{sum(1 for v in local_missing_cache.values() if v['need_nfo'] or v['need_image'])} 个演员需要处理")
-            
-            # 批量检查 Emby 缺失（只检查一次，缓存复用）
+                if not local_missing_cache:
+                    local_missing_cache = _check_local_missing_batch(performer_names, settings.get("actor_output_dir", ""))
+                    local_missing_count = sum(1 for v in local_missing_cache.values() if v['need_nfo'] or v['need_image'])
+                    log.info(f"[{PLUGIN_ID}] 本地缺失检查：{local_missing_count} 位演员需要处理")
+
             if upload_mode == 4 and emby_uploader:
-                check_emby = emby_uploader.get("check_emby_missing_batch")
-                if check_emby and not emby_missing_cache:
+                if not emby_missing_cache:
+                    emby_missing_cache = _check_emby_missing_batch(
+                        performer_names,
+                        settings.get("emby_server", ""),
+                        settings.get("emby_api_key", "")
+                    )
+                    emby_missing_count = sum(1 for v in emby_missing_cache.values() if v['need_image'] or v['need_metadata'])
+                    log.info(f"[{PLUGIN_ID}] Emby 缺失检查：{emby_missing_count} 位演员需要处理")
+
+            # 第 3 步：筛选出需要处理的演员 ID
+            current_page_ids = []
+            for performer in page_performers:
+                performer_id = performer.get("id")
+                performer_name = performer.get("name")
+                if not performer_id or not performer_name:
+                    continue
+
+                need_local, _, _ = _get_local_need(export_mode, performer_name, local_missing_cache)
+                need_emby, _, _ = _get_emby_need(upload_mode, performer_name, emby_missing_cache)
+
+                if need_local or need_emby:
+                    current_page_ids.append(performer_id)
+                else:
+                    actors_skipped += 1
+
+            total_actors += len(page_performers)
+            log.info(f"[{PLUGIN_ID}] 需处理演员：{len(current_page_ids)}/{len(page_performers)}")
+
+            # 第 4 步：处理需要处理的演员（逐个获取完整数据）
+            for performer_id in current_page_ids:
+                try:
+                    performer = stash.find_performer(performer_id)
+                    if not performer:
+                        log.error(f"找不到演员 ID: {performer_id}")
+                        local_fail_count += 1
+                        emby_fail_count += 1
+                        actors_processed += 1
+                        continue
+
+                    need_local, need_emby, local_success, emby_success = _process_performer(
+                        performer, export_mode, upload_mode,
+                        local_missing_cache, emby_missing_cache,
+                        local_exporter, emby_uploader, settings
+                    )
+
+                    # 统计
+                    if need_local or need_emby:
+                        actors_processed += 1
+                        if need_local:
+                            if local_success:
+                                local_ok_count += 1
+                            else:
+                                local_fail_count += 1
+                        if need_emby:
+                            if emby_success:
+                                emby_ok_count += 1
+                            else:
+                                emby_fail_count += 1
+
+                except Exception as e:
+                    log.error(f"获取缺失演员完整数据失败：{e}")
+                    local_fail_count += 1
+                    emby_fail_count += 1
+                    actors_processed += 1
+
+        else:
+            # 非批量检查模式：已获取完整数据，直接处理
+            # 如果需要补缺，先批量检查缺失
+            if export_mode == 4 and local_exporter:
+                performer_names = [p.get("name") for p in page_performers if p.get("name")]
+                if not local_missing_cache:
+                    log.info(f"[{PLUGIN_ID}] 批量检查本地缺失...")
+                    local_missing_cache = _check_local_missing_batch(performer_names, settings.get("actor_output_dir", ""))
+                    log.info(f"[{PLUGIN_ID}] 本地缺失检查结果：{sum(1 for v in local_missing_cache.values() if v['need_nfo'] or v['need_image'])} 个演员需要处理")
+
+            if upload_mode == 4 and emby_uploader:
+                performer_names = [p.get("name") for p in page_performers if p.get("name")]
+                if not emby_missing_cache:
                     log.info(f"[{PLUGIN_ID}] 批量检查 Emby 缺失...")
-                    emby_missing_cache = check_emby(
+                    emby_missing_cache = _check_emby_missing_batch(
                         performer_names,
                         settings.get("emby_server", ""),
                         settings.get("emby_api_key", "")
                     )
                     log.info(f"[{PLUGIN_ID}] Emby 缺失检查结果：{sum(1 for v in emby_missing_cache.values() if v['need_image'] or v['need_metadata'])} 个演员需要处理")
-            
-            # 第 3 步：筛选出当前页需要处理的演员 ID（只存当前页，不累积）
-            current_page_missing_ids = []
-            for performer in page_performers_basic:
-                performer_id = performer.get("id")
-                performer_name = performer.get("name")
-                
-                if not performer_id or not performer_name:
-                    continue
-                
-                need_local = False
-                need_emby = False
-                
-                if export_mode == 4 and performer_name in local_missing_cache:
-                    status = local_missing_cache[performer_name]
-                    need_local = status["need_nfo"] or status["need_image"]
-                
-                if upload_mode == 4 and performer_name in emby_missing_cache:
-                    status = emby_missing_cache[performer_name]
-                    need_emby = status["need_image"] or status["need_metadata"]
-                
-                if need_local or need_emby:
-                    current_page_missing_ids.append(performer_id)
-            
-            need_process_count = len(current_page_missing_ids)
-            log.info(f"[{PLUGIN_ID}] 第{page}批需要处理的演员：{need_process_count}/{len(page_performers_basic)}")
-            
-            # 第 4 步：获取当前页缺失演员的完整数据并处理（分页获取，避免一次太多）
-            if need_process_count > 0:
-                full_fragment = """
-                    id
-                    name
-                    image_path
-                    gender
-                    country
-                    birthdate
-                    height_cm
-                    measurements
-                    fake_tits
-                    disambiguation
-                    details
-                    ethnicity
-                    eye_color
-                    hair_color
-                    career_length
-                    tattoos
-                    piercings
-                    weight
-                    death_date
-                    circumcised
-                    penis_length
-                    alias_list
-                    urls
-                """
-                
-                # 分批获取完整数据（每批 100 个）
-                missing_per_page = 100
-                for i in range(0, len(current_page_missing_ids), missing_per_page):
-                    batch_ids = current_page_missing_ids[i:i+missing_per_page]
-                    
-                    try:
-                        f_filter = {
-                            "value": {
-                                "value": [str(pid) for pid in batch_ids],
-                                "modifier": "INCLUDES_ALL"
-                            },
-                            "type": "ID"
-                        }
-                        
-                        page_performers = stash.find_performers(
-                            f=f_filter,
-                            filter={"page": 1, "per_page": missing_per_page},
-                            fragment=full_fragment,
-                        )
-                        
-                        if not page_performers:
-                            continue
-                        
-                        # 处理这批演员
-                        for performer in page_performers:
-                            performer_id = performer.get("id")
-                            performer_name = performer.get("name")
-                            
-                            if not performer_id:
-                                continue
-                            
-                            # 只有缺失才处理
-                            # 检查 export_mode：0=不处理，4=补缺
-                            if export_mode == 4 and local_exporter:
-                                log.info(f"[{PLUGIN_ID}] 演员 {performer_name}：export_mode=4，处理本地补缺")
-                                export_func = local_exporter.get("export_actor_to_local")
-                                if export_func:
-                                    export_func(
-                                        performer=performer,
-                                        actor_output_dir=settings.get("actor_output_dir", ""),
-                                        export_mode=1,
-                                        server_conn=settings.get("server_connection", {}),
-                                        stash_api_key=settings.get("stash_api_key", ""),
-                                        dry_run=settings.get("dry_run", False)
-                                    )
-                                total_success += 1
-                                total_processed += 1
-                            elif export_mode == 0:
-                                log.debug(f"[{PLUGIN_ID}] 演员 {performer_name}：export_mode=0，跳过本地导出")
 
-                            # 检查 upload_mode：0=不处理，4=补缺
-                            if upload_mode == 4 and emby_uploader:
-                                log.info(f"[{PLUGIN_ID}] 演员 {performer_name}：upload_mode=4，处理 Emby 补缺")
-                                upload_func = emby_uploader.get("upload_actor_to_emby")
-                                if upload_func:
-                                    upload_func(
-                                        performer=performer,
-                                        emby_server=settings.get("emby_server", ""),
-                                        emby_api_key=settings.get("emby_api_key", ""),
-                                        server_conn=settings.get("server_connection", {}),
-                                        stash_api_key=settings.get("stash_api_key", ""),
-                                        upload_mode=1
-                                    )
-                                total_success += 1
-                                total_processed += 1
-                            elif upload_mode == 0:
-                                log.debug(f"[{PLUGIN_ID}] 演员 {performer_name}：upload_mode=0，跳过 Emby 上传")
-                        
-                        del page_performers
-                        
-                    except Exception as e:
-                        log.error(f"获取缺失演员完整数据失败：{e}")
-                        continue
-            
-            # 统计跳过的演员
-            total_skip += (len(page_performers_basic) - need_process_count)
-            
-        else:
-            # 非模式 4，使用原有逻辑（获取完整数据后逐个处理）
-            full_fragment = """
-                id
-                name
-                image_path
-                gender
-                country
-                birthdate
-                height_cm
-                measurements
-                fake_tits
-                disambiguation
-                details
-                ethnicity
-                eye_color
-                hair_color
-                career_length
-                tattoos
-                piercings
-                weight
-                death_date
-                circumcised
-                penis_length
-                alias_list
-                urls
-            """
-            
-            try:
-                page_performers = stash.find_performers(
-                    f=None,
-                    filter={"page": page, "per_page": per_page},
-                    fragment=full_fragment,
-                )
-            except Exception as e:
-                log.error(f"获取演员完整数据失败：{e}")
-                del page_performers_basic
-                break
-            
             # 处理当前页演员
-            page_total = len(page_performers)
-            for i, performer in enumerate(page_performers):
+            total_actors += len(page_performers)
+
+            for performer in page_performers:
                 try:
-                    performer_id = performer.get("id")
-                    if performer_id:
-                        # 直接处理（不依赖 sync_performer）
-                        if export_mode != 0 and local_exporter:
-                            export_func = local_exporter.get("export_actor_to_local")
-                            if export_func:
-                                export_func(
-                                    performer=performer,
-                                    actor_output_dir=settings.get("actor_output_dir", ""),
-                                    export_mode=export_mode,
-                                    server_conn=settings.get("server_connection", {}),
-                                    stash_api_key=settings.get("stash_api_key", ""),
-                                    dry_run=settings.get("dry_run", False)
-                                )
-                        
-                        if upload_mode != 0 and emby_uploader:
-                            upload_func = emby_uploader.get("upload_actor_to_emby")
-                            if upload_func:
-                                upload_func(
-                                    performer=performer,
-                                    emby_server=settings.get("emby_server", ""),
-                                    emby_api_key=settings.get("emby_api_key", ""),
-                                    server_conn=settings.get("server_connection", {}),
-                                    stash_api_key=settings.get("stash_api_key", ""),
-                                    upload_mode=upload_mode
-                                )
-                        
-                        total_success += 1
-                    
-                    total_processed += 1
-                    progress = total_processed / (page * per_page)
-                    task_log_func(f"处理演员 {performer.get('name', 'Unknown')} (第{page}批，{i+1}/{page_total})", 
-                                 progress=min(progress, 1.0))
+                    if not performer.get("id"):
+                        continue
+
+                    need_local, need_emby, local_success, emby_success = _process_performer(
+                        performer, export_mode, upload_mode,
+                        local_missing_cache, emby_missing_cache,
+                        local_exporter, emby_uploader, settings
+                    )
+
+                    # 统计
+                    if need_local or need_emby:
+                        actors_processed += 1
+                        if need_local:
+                            if local_success:
+                                local_ok_count += 1
+                            else:
+                                local_fail_count += 1
+                        if need_emby:
+                            if emby_success:
+                                emby_ok_count += 1
+                            else:
+                                emby_fail_count += 1
+                    else:
+                        actors_skipped += 1
+
                 except Exception as e:
                     log.error(f"处理演员 {performer.get('name', 'Unknown')} 失败：{e}")
-                    total_processed += 1
-            
-            del page_performers
-        
-        # 释放内存
-        page_total = len(page_performers_basic)
-        del page_performers_basic
-        
+                    local_fail_count += 1
+                    emby_fail_count += 1
+                    actors_processed += 1
+
+        # 每页完成后显示进度
+        task_log_func(f"第{page}批完成：处理 {actors_processed} 位演员",
+                     progress=total_actors / max(total_actors, 1))
+
         # 如果当前页少于 per_page，说明已经是最后一页
         if page_total < per_page:
             break
-        
+
         page += 1
-    
-    msg = f"处理了 {total_processed} 个演员，成功 {total_success} 个"
-    if total_skip > 0:
-        msg += f"，跳过 {total_skip} 个"
-    log.info(msg)
+
+    # 生成最终统计日志
+    log.info(f"[{PLUGIN_ID}] 处理完成：Stash 共 {total_actors} 位演员")
+
+    if actors_skipped > 0:
+        log.info(f"  - 跳过：{actors_skipped} 位（不需要处理）")
+    log.info(f"  - 处理：{actors_processed} 位")
+
+    if export_mode > 0:
+        log.info(f"  - 本地：成功 {local_ok_count} 位，失败 {local_fail_count} 位")
+
+    if upload_mode > 0:
+        log.info(f"  - Emby: 成功 {emby_ok_count} 位，失败 {emby_fail_count} 位")
+
+    # 生成消息
+    msg = f"处理完成：Stash 共 {total_actors} 位演员"
+    if actors_skipped > 0:
+        msg += f"，跳过 {actors_skipped} 位"
+    msg += f"，处理 {actors_processed} 位"
+    if export_mode > 0:
+        msg += f"，本地成功 {local_ok_count}/{local_ok_count + local_fail_count} 位"
+    if upload_mode > 0:
+        msg += f"，Emby 成功 {emby_ok_count}/{emby_ok_count + emby_fail_count} 位"
+
     task_log_func(msg, progress=1.0)
-    
     return msg

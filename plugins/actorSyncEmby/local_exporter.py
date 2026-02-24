@@ -30,81 +30,6 @@ def safe_segment(segment: str) -> str:
     return segment or "_"
 
 
-def check_local_missing(performer_name: str, actor_output_dir: str) -> Dict[str, bool]:
-    """
-    检查演员本地文件是否缺失（不需要获取完整演员数据）。
-
-    Args:
-        performer_name: 演员名称
-        actor_output_dir: 演员输出根目录
-
-    Returns:
-        {"need_nfo": bool, "need_image": bool}
-    """
-    result = {"need_nfo": False, "need_image": False}
-
-    if not actor_output_dir or not performer_name:
-        return result
-
-    safe_name = safe_segment(performer_name)
-    actor_dir = os.path.join(actor_output_dir, safe_name)
-    nfo_path = os.path.join(actor_dir, "actor.nfo")
-    image_path = os.path.join(actor_dir, "folder.jpg")
-
-    result["need_nfo"] = not os.path.exists(nfo_path)
-    result["need_image"] = not os.path.exists(image_path)
-
-    return result
-
-
-def check_local_missing_batch(performer_names: list, actor_output_dir: str) -> Dict[str, Dict[str, bool]]:
-    """
-    批量检查演员本地文件是否缺失（只读取一次磁盘目录）。
-
-    Args:
-        performer_names: 演员名称列表
-        actor_output_dir: 演员输出根目录
-
-    Returns:
-        {演员名：{"need_nfo": bool, "need_image": bool}}
-    """
-    results = {}
-    
-    if not actor_output_dir or not performer_names:
-        for name in performer_names:
-            results[name] = {"need_nfo": True, "need_image": True}
-        return results
-    
-    # 第 1 步：一次性读取所有本地目录（只读 1 次磁盘）
-    existing_dirs = {}
-    if os.path.exists(actor_output_dir):
-        try:
-            for dir_name in os.listdir(actor_output_dir):
-                actor_dir = os.path.join(actor_output_dir, dir_name)
-                if os.path.isdir(actor_dir):
-                    files = os.listdir(actor_dir)
-                    existing_dirs[dir_name] = {
-                        "has_nfo": "actor.nfo" in files,
-                        "has_image": any(f in files for f in ["folder.jpg", "poster.jpg"])
-                    }
-        except Exception as e:
-            log.error(f"读取本地目录失败：{e}")
-    
-    # 第 2 步：内存比对（不读磁盘）
-    for name in performer_names:
-        safe_name = safe_segment(name)
-        if safe_name in existing_dirs:
-            dir_info = existing_dirs[safe_name]
-            results[name] = {
-                "need_nfo": not dir_info["has_nfo"],
-                "need_image": not dir_info["has_image"]
-            }
-        else:
-            results[name] = {"need_nfo": True, "need_image": True}
-    
-    return results
-
-
 def build_absolute_url(url: str, server_conn: Dict[str, Any]) -> str:
     """
     把相对路径补全为带协议/主机的绝对 URL，方便下载图片。
@@ -334,7 +259,9 @@ def export_actor_to_local(performer: Dict[str, Any],
                           export_mode: int = 1,
                           server_conn: Optional[Dict[str, Any]] = None,
                           stash_api_key: str = "",
-                          dry_run: bool = False) -> Dict[str, Optional[str]]:
+                          dry_run: bool = False,
+                          need_nfo: bool = True,
+                          need_image: bool = True) -> Dict[str, Optional[str]]:
     """
     导出演员数据到本地（根据导出模式）。
 
@@ -350,6 +277,8 @@ def export_actor_to_local(performer: Dict[str, Any],
         server_conn: Stash 服务器连接信息
         stash_api_key: Stash API 密钥
         dry_run: 是否仅模拟
+        need_nfo: 是否需要导出 NFO（补缺模式时使用）
+        need_image: 是否需要导出图片（补缺模式时使用）
 
     Returns:
         包含生成文件路径的字典：{"nfo": nfo_path, "image": image_path}
@@ -382,12 +311,13 @@ def export_actor_to_local(performer: Dict[str, Any],
 
     # 模式 1：强制覆盖 (图片 + NFO)
     if export_mode == 1:
-        log.info(f"导出模式 1：强制覆盖演员 {name} 的图片 + NFO")
         nfo_path = write_actor_nfo(actor_dir, performer, export_nfo=True)
         result["nfo"] = nfo_path
         if image_url:
             image_path = download_actor_image(actor_dir, performer, server_conn, stash_api_key, download_images=True)
             result["image"] = image_path
+        else:
+            log.warning(f"演员 {name} 没有图片 URL，无法下载图片")
         return result
 
     # 模式 2：只导出 NFO (覆盖)
@@ -407,28 +337,19 @@ def export_actor_to_local(performer: Dict[str, Any],
             log.info(f"演员 {name} 没有图片 URL，跳过图片下载")
         return result
 
-    # 模式 4：补缺本地 (只导出缺失的)
+    # 模式 4：补缺本地 (只导出缺失的，使用传入的 need_nfo/need_image 参数)
     if export_mode == 4:
-        log.info(f"导出模式 4：补缺演员 {name} 的本地数据")
         nfo_path = os.path.join(actor_dir, "actor.nfo")
         image_path = os.path.join(actor_dir, "folder.jpg")
 
-        need_nfo = not os.path.exists(nfo_path)
-        need_image = not os.path.exists(image_path) and image_url
-
+        # 只补缺缺失的
         if need_nfo:
-            log.info(f"NFO 缺失，生成 NFO: {nfo_path}")
             nfo_path = write_actor_nfo(actor_dir, performer, export_nfo=True)
             result["nfo"] = nfo_path
-        else:
-            log.info(f"NFO 已存在，跳过：{nfo_path}")
 
         if need_image and image_url:
-            log.info(f"图片缺失，下载图片：{image_path}")
             image_path = download_actor_image(actor_dir, performer, server_conn, stash_api_key, download_images=True)
             result["image"] = image_path
-        elif not image_url:
-            log.info(f"演员 {name} 没有图片 URL，跳过图片下载")
 
         return result
 
