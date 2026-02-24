@@ -34,7 +34,7 @@ settings:
     type: BOOLEAN
   enableWorkerLog:
     displayName: 启用新建演员异步同步日志
-    description: "是否将新建演员 Hook 触发的后台异步同步脚本日志写入到 actor_sync_worker.log 文件（仅针对 Performer.Create.Post Hook，关闭后日志将完全丢弃，建议测试稳定后关闭）"
+    description: "是否将新建演员 Hook 触发的后台异步同步脚本日志写入到 actor_sync_worker.log 文件（仅针对 Performer.Create.Post Hook，关闭后日志将完全丢弃，建议创建演员上传emby有问题可打开查看日志）"
     type: BOOLEAN
 
 exec:

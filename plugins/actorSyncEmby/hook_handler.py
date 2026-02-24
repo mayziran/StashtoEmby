@@ -46,7 +46,7 @@ def _export_local(performer: Dict[str, Any], settings: Dict[str, Any]) -> bool:
 
 def _start_emby_async(performer_id: int, settings: Dict[str, Any]) -> bool:
     """
-    启动 Emby 异步上传（通过 worker，延迟 85 秒后执行）
+    启动 Emby 异步上传（通过 worker 延迟执行）
 
     Returns:
         是否成功启动

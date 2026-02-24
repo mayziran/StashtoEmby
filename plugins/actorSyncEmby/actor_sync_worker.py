@@ -2,7 +2,7 @@
 演员同步 worker - Create Hook 专用，延迟上传演员到 Emby
 
 延迟机制:
-    35 秒 (Stash) + 50 秒 (Emby) + 重试 (30s→60s→90s)
+    35 秒 (Stash) + 70 秒 (Emby) + 重试 (30s→60s→90s)
 """
 
 import json
@@ -199,7 +199,7 @@ def main():
 
     # 阶段 3: 等待 Emby 刷新完成
     log_info("【阶段 3/4】等待 Emby 刷新完成...")
-    time.sleep(50)
+    time.sleep(70)
     
     # 阶段 4: 上传演员信息（带重试）
     log_info("【阶段 4/4】上传演员信息到 Emby...")
