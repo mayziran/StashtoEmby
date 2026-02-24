@@ -63,18 +63,25 @@ def _process_hook_performer(
 
     # hook_mode=2：只上传 Emby（覆盖模式）
     elif hook_mode == 2:
-        if emby_uploader:
-            upload_func = emby_uploader.get("upload_actor_to_emby")
-            if upload_func:
-                upload_func(
-                    performer=performer,
-                    emby_server=settings.get("emby_server", ""),
-                    emby_api_key=settings.get("emby_api_key", ""),
-                    server_conn=settings.get("server_connection", {}),
-                    stash_api_key=settings.get("stash_api_key", ""),
-                    upload_mode=1  # 都上传（图片 + 元数据）
-                )
-        msg = f"演员 {performer_name} {hook_type}成功，已上传 Emby（覆盖模式）"
+        # Create Hook 使用异步 worker，Update Hook 使用同步执行
+        if hook_type == "创建":
+            upload_settings = dict(settings)
+            upload_settings["upload_mode"] = 1
+            start_async_worker(performer_id, upload_settings)
+            msg = f"演员 {performer_name} {hook_type}成功，已启动异步上传 Emby（覆盖模式）"
+        else:
+            if emby_uploader:
+                upload_func = emby_uploader.get("upload_actor_to_emby")
+                if upload_func:
+                    upload_func(
+                        performer=performer,
+                        emby_server=settings.get("emby_server", ""),
+                        emby_api_key=settings.get("emby_api_key", ""),
+                        server_conn=settings.get("server_connection", {}),
+                        stash_api_key=settings.get("stash_api_key", ""),
+                        upload_mode=1  # 都上传（图片 + 元数据）
+                    )
+            msg = f"演员 {performer_name} {hook_type}成功，已上传 Emby（覆盖模式）"
 
     # hook_mode=3：同时输出本地 + Emby（都是覆盖模式）
     elif hook_mode == 3:
