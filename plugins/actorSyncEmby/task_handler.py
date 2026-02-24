@@ -15,6 +15,31 @@ from urllib.parse import quote
 import requests
 import stashapi.log as log
 
+# 插件 ID 常量
+PLUGIN_ID = "actorSyncEmby"
+
+
+def _update_stats(
+    stats: Dict[str, int],
+    need_local: bool,
+    need_emby: bool,
+    local_success: bool,
+    emby_success: bool
+) -> None:
+    """更新统计信息"""
+    if need_local or need_emby:
+        stats["actors_processed"] += 1
+        if need_local:
+            if local_success:
+                stats["local_ok_count"] += 1
+            else:
+                stats["local_fail_count"] += 1
+        if need_emby:
+            if emby_success:
+                stats["emby_ok_count"] += 1
+            else:
+                stats["emby_fail_count"] += 1
+
 
 def _safe_segment(segment: str) -> str:
     """清理路径段，避免出现奇怪字符。"""
@@ -308,10 +333,6 @@ def _process_performer(
     return need_local, need_emby, local_success, emby_success
 
 
-# 在模块级别定义 PLUGIN_ID，供 _process_performer 使用
-PLUGIN_ID = "actorSyncEmby"
-
-
 def handle_task(
     stash: Any,
     settings: Dict[str, Any],
@@ -328,8 +349,6 @@ def handle_task(
     Returns:
         处理结果消息
     """
-    global PLUGIN_ID
-
     export_mode = settings.get("export_mode", 1)
     upload_mode = settings.get("upload_mode", 1)
 
@@ -454,18 +473,20 @@ def handle_task(
                     )
 
                     # 统计
-                    if need_local or need_emby:
-                        actors_processed += 1
-                        if need_local:
-                            if local_success:
-                                local_ok_count += 1
-                            else:
-                                local_fail_count += 1
-                        if need_emby:
-                            if emby_success:
-                                emby_ok_count += 1
-                            else:
-                                emby_fail_count += 1
+                    stats = {
+                        "actors_processed": actors_processed,
+                        "local_ok_count": local_ok_count,
+                        "local_fail_count": local_fail_count,
+                        "emby_ok_count": emby_ok_count,
+                        "emby_fail_count": emby_fail_count,
+                    }
+                    _update_stats(stats, need_local, need_emby, local_success, emby_success)
+                    # 更新本地变量
+                    actors_processed = stats["actors_processed"]
+                    local_ok_count = stats["local_ok_count"]
+                    local_fail_count = stats["local_fail_count"]
+                    emby_ok_count = stats["emby_ok_count"]
+                    emby_fail_count = stats["emby_fail_count"]
 
                 except Exception as e:
                     log.error(f"获取缺失演员完整数据失败：{e}")
@@ -509,19 +530,22 @@ def handle_task(
                     )
 
                     # 统计
-                    if need_local or need_emby:
-                        actors_processed += 1
-                        if need_local:
-                            if local_success:
-                                local_ok_count += 1
-                            else:
-                                local_fail_count += 1
-                        if need_emby:
-                            if emby_success:
-                                emby_ok_count += 1
-                            else:
-                                emby_fail_count += 1
-                    else:
+                    stats = {
+                        "actors_processed": actors_processed,
+                        "local_ok_count": local_ok_count,
+                        "local_fail_count": local_fail_count,
+                        "emby_ok_count": emby_ok_count,
+                        "emby_fail_count": emby_fail_count,
+                    }
+                    _update_stats(stats, need_local, need_emby, local_success, emby_success)
+                    # 更新本地变量
+                    actors_processed = stats["actors_processed"]
+                    local_ok_count = stats["local_ok_count"]
+                    local_fail_count = stats["local_fail_count"]
+                    emby_ok_count = stats["emby_ok_count"]
+                    emby_fail_count = stats["emby_fail_count"]
+
+                    if not (need_local or need_emby):
                         actors_skipped += 1
 
                 except Exception as e:
@@ -532,7 +556,7 @@ def handle_task(
 
         # 每页完成后显示进度
         task_log_func(f"第{page}批完成：处理 {actors_processed} 位演员",
-                     progress=total_actors / max(total_actors, 1))
+                     progress=actors_processed / max(total_actors, 1))
 
         # 如果当前页少于 per_page，说明已经是最后一页
         if page_total < per_page:

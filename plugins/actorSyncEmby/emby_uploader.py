@@ -12,7 +12,6 @@ Emby 上传模块 - 将演员信息上传到 Emby 服务器
 import base64
 import json
 import os
-import re
 import time
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
@@ -21,137 +20,10 @@ from urllib.parse import quote
 import requests
 import stashapi.log as log
 
-
-def safe_segment(segment: str) -> str:
-    """
-    简单清理路径段，避免出现奇怪字符。
-    """
-    segment = segment.strip().replace("\\", "_").replace("/", "_")
-    # 去掉常见非法字符
-    segment = re.sub(r'[<>:"|?*]', "_", segment)
-    # 防止空字符串
-    return segment or "_"
+from utils import safe_segment, build_absolute_url, build_requests_session
 
 
-def build_absolute_url(url: str, server_conn: Dict[str, Any]) -> str:
-    """
-    把相对路径补全为带协议/主机的绝对 URL，方便下载图片。
-    """
-    if not url:
-        return url
-    if url.startswith("http://") or url.startswith("https://"):
-        return url
-
-    scheme = server_conn.get("Scheme", "http")
-    host = server_conn.get("Host", "localhost")
-    port = server_conn.get("Port")
-
-    base = f"{scheme}://{host}"
-    if port:
-        base = f"{base}:{port}"
-
-    if not url.startswith("/"):
-        url = "/" + url
-
-    return base + url
-
-
-def _build_requests_session(server_conn: Dict[str, Any], stash_api_key: str = "") -> requests.Session:
-    """
-    基于 server_connection 构建一个带 SessionCookie 的 requests 会话，
-    用于从 Stash 下载演员图片。
-    """
-    session = requests.Session()
-
-    # 1) 使用 SessionCookie（保持向后兼容）
-    cookie = server_conn.get("SessionCookie") or {}
-    name = cookie.get("Name") or cookie.get("name")
-    value = cookie.get("Value") or cookie.get("value")
-    domain = cookie.get("Domain") or cookie.get("domain")
-    path = cookie.get("Path") or cookie.get("path") or "/"
-
-    if name and value:
-        cookie_kwargs = {"path": path or "/"}
-        if domain:
-            cookie_kwargs["domain"] = domain
-        session.cookies.set(name, value, **cookie_kwargs)
-
-    # 2) 优先使用 Stash API Key，避免 Session 过期导致返回登录页 HTML
-    if stash_api_key:
-        session.headers["ApiKey"] = stash_api_key
-
-    return session
-
-
-def _download_binary(url: str, dst_path: str, server_conn: Dict[str, Any], stash_api_key: str = "", detect_ext: bool = False) -> bool:
-    """
-    从 Stash（或其它 HTTP 源）下载二进制文件到指定路径。
-    """
-    if not url:
-        return False
-
-    url = build_absolute_url(url, server_conn)
-    session = _build_requests_session(server_conn, stash_api_key)
-
-    # 最多重试 3 次
-    max_attempts = 3
-    last_error = None
-
-    for attempt in range(1, max_attempts + 1):
-        try:
-            resp = session.get(url, timeout=30, stream=True)
-            resp.raise_for_status()
-
-            # 默认直接使用调用方给的目标路径
-            final_path = dst_path
-
-            if detect_ext:
-                content_type = (resp.headers.get("Content-Type") or "").lower()
-                guessed_ext = ""
-
-                if "image/" in content_type:
-                    if "jpeg" in content_type or "jpg" in content_type:
-                        guessed_ext = ".jpg"
-                    elif "png" in content_type:
-                        guessed_ext = ".png"
-                    elif "webp" in content_type:
-                        guessed_ext = ".webp"
-                    elif "gif" in content_type:
-                        guessed_ext = ".gif"
-                    elif "svg" in content_type:
-                        guessed_ext = ".svg"
-
-                if not guessed_ext:
-                    try:
-                        parsed = urlparse(resp.url or url)
-                        _, ext_from_url = os.path.splitext(parsed.path)
-                        guessed_ext = ext_from_url
-                    except Exception:
-                        guessed_ext = ""
-
-                # 根据 AutoMoveOrganized 的做法，固定使用传入的路径，不添加扩展名
-                final_path = dst_path
-
-            os.makedirs(os.path.dirname(final_path), exist_ok=True)
-            with open(final_path, "wb") as f:
-                for chunk in resp.iter_content(chunk_size=8192):
-                    if chunk:
-                        f.write(chunk)
-
-            log.info(f"下载完成 '{url}' -> '{final_path}'")
-            return True
-        except Exception as e:
-            last_error = e
-            log.error(f"下载失败 (第{attempt}次) '{url}' -> '{dst_path}': {e}")
-            if attempt < max_attempts:
-                # 简单退避
-                time.sleep(2 * attempt)
-
-    log.error(f"下载失败，已重试 {max_attempts} 次仍失败 '{url}' -> '{dst_path}': {last_error}")
-    return False
-
-
-def _upload_image_to_emby(emby_server: str, emby_api_key: str, actor_id: str, img_path: str, name: str, user_id: Optional[str] = None, sync_mode: int = 1, image_data: Optional[bytes] = None) -> bool:
+def _upload_image_to_emby(emby_server: str, emby_api_key: str, actor_id: str, img_path: str, name: str, sync_mode: int = 1, image_data: Optional[bytes] = None) -> bool:
     """
     通用的图片上传函数，供所有同步模式使用
 
@@ -166,7 +38,7 @@ def _upload_image_to_emby(emby_server: str, emby_api_key: str, actor_id: str, im
         with open(img_path, 'rb') as f:
             b6_pic = base64.b64encode(f.read())
 
-    # Persons（演员）使用直接 Items 端点，不需要 user_id
+    # Persons（演员）使用直接 Items 端点
     upload_url = f'{emby_server}/emby/Items/{actor_id}/Images/Primary?api_key={emby_api_key}'
     headers = {'Content-Type': 'image/jpg'}
 
@@ -457,7 +329,7 @@ def upload_actor_to_emby(
             image_url = performer.get("image_path")
             if image_url:
                 abs_url = build_absolute_url(image_url, server_conn)
-                session = _build_requests_session(server_conn, stash_api_key)
+                session = build_requests_session(server_conn, stash_api_key)
                 try:
                     resp = session.get(abs_url, timeout=30)
                     if resp.status_code == 200:
