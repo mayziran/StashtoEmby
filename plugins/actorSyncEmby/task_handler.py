@@ -155,9 +155,9 @@ def _get_local_need(
     export_mode: int,
     performer_name: str,
     local_cache: Dict[str, Any]
-) -> Tuple[bool, bool, bool]:
+) -> Tuple[bool, int]:
     """
-    判断是否需要处理本地导出。
+    判断是否需要处理本地导出，返回实际导出模式。
 
     Args:
         export_mode: 导出模式 (0-4)
@@ -165,32 +165,37 @@ def _get_local_need(
         local_cache: 本地缺失检查结果缓存
 
     Returns:
-        (need_local, need_nfo, need_image)
+        (need_local, actual_export_mode)
+        need_local: 是否需要导出
+        actual_export_mode: 实际使用的导出模式 (1=都导出，2=只 NFO，3=只图片)
     """
     if export_mode == 0:
-        return False, False, False
-    elif export_mode == 1:  # 覆盖：图片 +NFO 都处理
-        return True, True, True
-    elif export_mode == 2:  # 只 NFO 模式
-        return True, True, False
-    elif export_mode == 3:  # 只图片模式
-        return True, False, True
-    elif export_mode == 4:  # 补缺模式
+        return False, 0
+    elif export_mode in [1, 2, 3]:  # 覆盖模式直接返回
+        return True, export_mode
+    elif export_mode == 4:  # 补缺模式：根据缓存计算
         if performer_name in local_cache:
             status = local_cache[performer_name]
             need_nfo = status["need_nfo"]
             need_image = status["need_image"]
-            return need_nfo or need_image, need_nfo, need_image
-    return False, False, False
+            if need_nfo and need_image:
+                return True, 1  # 都导出
+            elif need_nfo:
+                return True, 2  # 只 NFO
+            elif need_image:
+                return True, 3  # 只图片
+            else:
+                return False, 0  # 都不需要
+    return False, 0
 
 
 def _get_emby_need(
     upload_mode: int,
     performer_name: str,
     emby_cache: Dict[str, Any]
-) -> Tuple[bool, bool, bool]:
+) -> Tuple[bool, int]:
     """
-    判断是否需要处理 Emby 上传。
+    判断是否需要处理 Emby 上传，返回实际上模式。
 
     Args:
         upload_mode: 上传模式 (0-4)
@@ -198,23 +203,28 @@ def _get_emby_need(
         emby_cache: Emby 缺失检查结果缓存
 
     Returns:
-        (need_emby, need_image, need_metadata)
+        (need_emby, actual_upload_mode)
+        need_emby: 是否需要上传
+        actual_upload_mode: 实际使用的上传模式 (1=都上传，2=只元数据，3=只图片)
     """
     if upload_mode == 0:
-        return False, False, False
-    elif upload_mode == 1:  # 覆盖：图片 + 元数据都处理
-        return True, True, True
-    elif upload_mode == 2:  # 只元数据模式
-        return True, False, True
-    elif upload_mode == 3:  # 只图片模式
-        return True, True, False
-    elif upload_mode == 4:  # 补缺模式
+        return False, 0
+    elif upload_mode in [1, 2, 3]:  # 覆盖模式直接返回
+        return True, upload_mode
+    elif upload_mode == 4:  # 补缺模式：根据缓存计算
         if performer_name in emby_cache:
             status = emby_cache[performer_name]
             need_image = status["need_image"]
             need_metadata = status["need_metadata"]
-            return need_image or need_metadata, need_image, need_metadata
-    return False, False, False
+            if need_image and need_metadata:
+                return True, 1  # 都上传
+            elif need_metadata:
+                return True, 2  # 只元数据
+            elif need_image:
+                return True, 3  # 只图片
+            else:
+                return False, 0  # 都不需要
+    return False, 0
 
 
 def _process_performer(
@@ -248,8 +258,8 @@ def _process_performer(
         return False, False, True, True
 
     # 判断需求
-    need_local, need_nfo, need_image = _get_local_need(export_mode, performer_name, local_cache)
-    need_emby, need_emby_image, need_emby_metadata = _get_emby_need(upload_mode, performer_name, emby_cache)
+    need_local, actual_export_mode = _get_local_need(export_mode, performer_name, local_cache)
+    need_emby, actual_upload_mode = _get_emby_need(upload_mode, performer_name, emby_cache)
 
     if not need_local and not need_emby:
         return need_local, need_emby, True, True
@@ -259,19 +269,17 @@ def _process_performer(
     emby_success = not need_emby
 
     # 导出本地
-    if need_local and local_exporter:
+    if need_local and local_exporter and actual_export_mode > 0:
         export_func = local_exporter.get("export_actor_to_local")
         if export_func:
             try:
                 export_func(
                     performer=performer,
                     actor_output_dir=settings.get("actor_output_dir", ""),
-                    export_mode=export_mode,
+                    export_mode=actual_export_mode,
                     server_conn=settings.get("server_connection", {}),
                     stash_api_key=settings.get("stash_api_key", ""),
-                    dry_run=settings.get("dry_run", False),
-                    need_nfo=need_nfo,
-                    need_image=need_image
+                    dry_run=settings.get("dry_run", False)
                 )
                 local_success = True
             except Exception as e:
@@ -279,7 +287,7 @@ def _process_performer(
                 local_success = False
 
     # 上传 Emby
-    if need_emby and emby_uploader:
+    if need_emby and emby_uploader and actual_upload_mode > 0:
         upload_func = emby_uploader.get("upload_actor_to_emby")
         if upload_func:
             try:
@@ -289,9 +297,7 @@ def _process_performer(
                     emby_api_key=settings.get("emby_api_key", ""),
                     server_conn=settings.get("server_connection", {}),
                     stash_api_key=settings.get("stash_api_key", ""),
-                    upload_mode=upload_mode,
-                    need_image=need_emby_image,
-                    need_metadata=need_emby_metadata
+                    upload_mode=actual_upload_mode
                 )
                 emby_success = True
             except Exception as e:
@@ -327,9 +333,10 @@ def handle_task(
     upload_mode = settings.get("upload_mode", 1)
 
     # 简洁的启动日志
-    mode_names = {0: "关闭", 1: "覆盖", 2: "只元数据", 3: "只图片", 4: "补缺"}
-    local_mode = mode_names.get(export_mode, str(export_mode))
-    emby_mode = mode_names.get(upload_mode, str(upload_mode))
+    local_mode_names = {0: "关闭", 1: "覆盖", 2: "只 NFO", 3: "只图片", 4: "补缺"}
+    emby_mode_names = {0: "关闭", 1: "覆盖", 2: "只元数据", 3: "只图片", 4: "补缺"}
+    local_mode = local_mode_names.get(export_mode, str(export_mode))
+    emby_mode = emby_mode_names.get(upload_mode, str(upload_mode))
 
     log.info(f"[{PLUGIN_ID}] Task 模式启动：本地{local_mode} + Emby{emby_mode}")
     task_log_func(f"开始处理演员 (本地={local_mode}, Emby={emby_mode})", progress=0.0)
@@ -417,8 +424,8 @@ def handle_task(
                 if not performer_id or not performer_name:
                     continue
 
-                need_local, _, _ = _get_local_need(export_mode, performer_name, local_missing_cache)
-                need_emby, _, _ = _get_emby_need(upload_mode, performer_name, emby_missing_cache)
+                need_local, _ = _get_local_need(export_mode, performer_name, local_missing_cache)
+                need_emby, _ = _get_emby_need(upload_mode, performer_name, emby_missing_cache)
 
                 if need_local or need_emby:
                     current_page_ids.append(performer_id)

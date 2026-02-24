@@ -178,7 +178,7 @@ def main():
     emby_api_key = config.get("emby_api_key", "").strip()
     stash_api_key = config.get("stash_api_key", "")
     server_conn = config.get("server_connection", {})
-    upload_mode = config.get("upload_mode", 1)  # 0=不上传，1=覆盖，2=只元数据，3=补齐
+    upload_mode = config.get("upload_mode", 1)  # 1=都上传，2=只元数据，3=只图片
     stash_url = config.get("stash_url", "http://localhost:9999")
     
     if not emby_server or not emby_api_key:

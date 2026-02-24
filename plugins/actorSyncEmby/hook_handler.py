@@ -8,11 +8,6 @@ Hook 处理器 - 处理 Performer.Create.Post 和 Performer.Update.Post 事件
 
 from typing import Any, Dict
 
-# ========== Hook 模式常量 ==========
-# Hook 固定使用覆盖模式
-HOOK_EXPORT_MODE = 1
-HOOK_UPLOAD_MODE = 1
-
 
 def _process_hook_performer(
     stash: Any,
@@ -59,7 +54,7 @@ def _process_hook_performer(
                 export_func(
                     performer=performer,
                     actor_output_dir=settings.get("actor_output_dir", ""),
-                    export_mode=HOOK_EXPORT_MODE,
+                    export_mode=1,  # 都导出（NFO+ 图片）
                     server_conn=settings.get("server_connection", {}),
                     stash_api_key=settings.get("stash_api_key", ""),
                     dry_run=settings.get("dry_run", False)
@@ -77,7 +72,7 @@ def _process_hook_performer(
                     emby_api_key=settings.get("emby_api_key", ""),
                     server_conn=settings.get("server_connection", {}),
                     stash_api_key=settings.get("stash_api_key", ""),
-                    upload_mode=HOOK_UPLOAD_MODE
+                    upload_mode=1  # 都上传（图片 + 元数据）
                 )
         msg = f"演员 {performer_name} {hook_type}成功，已上传 Emby（覆盖模式）"
 
@@ -89,7 +84,7 @@ def _process_hook_performer(
                 export_func(
                     performer=performer,
                     actor_output_dir=settings.get("actor_output_dir", ""),
-                    export_mode=HOOK_EXPORT_MODE,
+                    export_mode=1,  # 都导出（NFO+ 图片）
                     server_conn=settings.get("server_connection", {}),
                     stash_api_key=settings.get("stash_api_key", ""),
                     dry_run=settings.get("dry_run", False)
@@ -98,7 +93,7 @@ def _process_hook_performer(
             # Create Hook 使用异步 worker，Update Hook 使用同步执行
             if hook_type == "创建":
                 upload_settings = dict(settings)
-                upload_settings["upload_mode"] = HOOK_UPLOAD_MODE
+                upload_settings["upload_mode"] = 1
                 start_async_worker(performer_id, upload_settings)
                 msg = f"演员 {performer_name} {hook_type}成功，已导出本地并启动异步上传 Emby（覆盖模式）"
             else:
@@ -110,7 +105,7 @@ def _process_hook_performer(
                         emby_api_key=settings.get("emby_api_key", ""),
                         server_conn=settings.get("server_connection", {}),
                         stash_api_key=settings.get("stash_api_key", ""),
-                        upload_mode=HOOK_UPLOAD_MODE
+                        upload_mode=1  # 都上传（图片 + 元数据）
                     )
                 msg = f"演员 {performer_name} {hook_type}成功，已同步到本地和 Emby（覆盖模式）"
         else:

@@ -2,6 +2,11 @@
 Emby 上传模块 - 将演员信息上传到 Emby 服务器
 
 提供演员图片和元数据的上传功能。
+
+上传模式 (upload_mode):
+    1 = 都上传 (图片 + 元数据)
+    2 = 只上传元数据
+    3 = 只上传图片
 """
 
 import base64
@@ -15,9 +20,6 @@ from urllib.parse import quote
 
 import requests
 import stashapi.log as log
-
-# 常见图片扩展名
-IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".svg"}
 
 
 def safe_segment(segment: str) -> str:
@@ -400,12 +402,10 @@ def upload_actor_to_emby(
     emby_api_key: str,
     server_conn: Dict[str, Any],
     stash_api_key: str,
-    upload_mode: int = 1,
-    need_image: bool = True,
-    need_metadata: bool = True
+    upload_mode: int = 1
 ) -> None:
     """
-    将演员信息上传到 Emby 服务器。
+    将演员信息上传到 Emby 服务器（简化版）。
 
     Args:
         performer: 演员信息字典
@@ -414,12 +414,9 @@ def upload_actor_to_emby(
         server_conn: Stash 服务器连接信息
         stash_api_key: Stash API 密钥
         upload_mode: 上传模式
-            1 = 强制覆盖 (图片 + 元数据)
-            2 = 只上传元数据 (覆盖)
-            3 = 只上传图片 (覆盖)
-            4 = 补缺 Emby (只上传缺失的图片 + 元数据)
-        need_image: 是否需要上传图片（补缺模式时使用）
-        need_metadata: 是否需要上传元数据（补缺模式时使用）
+            1 = 都上传 (图片 + 元数据)
+            2 = 只上传元数据
+            3 = 只上传图片
     """
     if not emby_server or not emby_api_key:
         log.error("Emby 服务器地址或 API 密钥未配置，跳过上传")
@@ -451,32 +448,12 @@ def upload_actor_to_emby(
         data = r.json()
         actor_id = data['Id']
 
-        # 模式 4：补缺 Emby（使用传入的 need_image/need_metadata 参数）
-        if upload_mode == 4:
-            # 补缺图片（只上传缺失的，使用传入的 need_image 参数）
-            if need_image:
-                image_url = performer.get("image_path")
-                if image_url:
-                    abs_url = build_absolute_url(image_url, server_conn)
-                    session = _build_requests_session(server_conn, stash_api_key)
-                    try:
-                        resp = session.get(abs_url, timeout=30)
-                        if resp.status_code == 200:
-                            _upload_image_to_emby(emby_server, emby_api_key, actor_id, None, name, sync_mode=1, image_data=resp.content)
-                        else:
-                            log.error(f"从 Stash 获取演员 {name} 图片失败，状态码：{resp.status_code}")
-                    except Exception as e:
-                        log.error(f"获取或上传演员 {name} 图片失败：{e}")
-                else:
-                    log.warning(f"演员 {name} 没有图片 URL，无法上传图片")
+        # 模式 1 或 2：上传元数据
+        if upload_mode in [1, 2]:
+            update_actor_metadata_in_emby(performer, actor_id, emby_server, emby_api_key)
 
-            # 补缺元数据（只更新缺失的，使用传入的 need_metadata 参数）
-            if need_metadata:
-                update_actor_metadata_in_emby(performer, actor_id, emby_server, emby_api_key)
-
-        # 模式 1、2、3：覆盖模式
-        elif upload_mode in [1, 3]:
-            # 覆盖模式：直接上传图片
+        # 模式 1 或 3：上传图片
+        if upload_mode in [1, 3]:
             image_url = performer.get("image_path")
             if image_url:
                 abs_url = build_absolute_url(image_url, server_conn)
@@ -489,10 +466,8 @@ def upload_actor_to_emby(
                         log.error(f"从 Stash 获取演员 {name} 图片失败，状态码：{resp.status_code}")
                 except Exception as e:
                     log.error(f"获取或上传演员 {name} 图片失败：{e}")
-
-        # 模式 1、2：覆盖元数据
-        if upload_mode in [1, 2]:
-            update_actor_metadata_in_emby(performer, actor_id, emby_server, emby_api_key)
+            else:
+                log.warning(f"演员 {name} 没有图片 URL，无法上传图片")
 
     except Exception as e:
         log.error(f"上传演员 {name} 到 Emby 失败：{e}")
