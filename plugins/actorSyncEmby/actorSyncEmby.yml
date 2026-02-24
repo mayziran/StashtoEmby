@@ -1,6 +1,6 @@
 name: actorSyncEmby
 description: "将 Stash 中的演员信息（图片和 NFO 文件）导出到指定目录，并可选择性地将这些信息上传到 Emby 服务器。"
-version: "1.0.6"
+version: "1.0.8"
 url: https://github.com/mayziran/StashtoEmby/tree/master/plugins/actorSyncEmby
 
 settings:
