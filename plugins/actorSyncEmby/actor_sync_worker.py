@@ -1,11 +1,11 @@
 """
-演员同步后台工作脚本 - 异步执行演员同步到 Emby
+演员同步后台工作脚本 - 异步执行演员同步到 Emby（Hook 专用）
 
 工作流程:
 1. 等待 35 秒（让 Stash 完成后续操作）
 2. 调用 Emby API 刷新媒体库
 3. 等待 70 秒（让 Emby 完成扫描）
-4. 执行演员上传（图片 + 元数据）
+4. 执行演员上传（图片 + 元数据，固定使用覆盖模式）
 5. 失败时按指数退避重试（30s → 60s → 90s）
 """
 
@@ -178,7 +178,7 @@ def main():
     emby_api_key = config.get("emby_api_key", "").strip()
     stash_api_key = config.get("stash_api_key", "")
     server_conn = config.get("server_connection", {})
-    upload_mode = config.get("upload_mode", 1)  # 1=都上传，2=只元数据，3=只图片
+    upload_mode = config.get("upload_mode", 1)  # Hook 固定使用 mode=1（覆盖模式）
     stash_url = config.get("stash_url", "http://localhost:9999")
     
     if not emby_server or not emby_api_key:
