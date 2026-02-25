@@ -1,6 +1,6 @@
 name: actorSyncEmby
 description: "将 Stash 中的演员信息（图片和 NFO 文件）导出到指定目录，并可选择性地将这些信息上传到 Emby 服务器。"
-version: "1.0.8"
+version: "1.0.9"
 url: https://github.com/mayziran/StashtoEmby/tree/master/plugins/actorSyncEmby
 
 settings:
@@ -34,8 +34,12 @@ settings:
     type: BOOLEAN
   enableWorkerLog:
     displayName: 启用新建演员异步同步日志
-    description: "是否将新建演员 Hook 触发的后台异步同步脚本日志写入到 actor_sync_worker.log 文件（仅针对 Performer.Create.Post Hook，关闭后日志将完全丢弃，建议创建演员上传emby有问题可打开查看日志）"
+    description: "是否将新建演员 Hook 触发的后台异步同步脚本日志写入到 actor_sync_worker.log 文件（仅针对 Performer.Create.Post Hook，关闭后日志将完全丢弃，建议创建演员上传 emby 有问题可打开查看日志）"
     type: BOOLEAN
+  workerDelays:
+    displayName: 新建演员异步同步延迟时间
+    description: "格式：等待 Stash 更新演员影片时间，等待 Emby 刷新时间（秒），例如：35,70。默认 35,70"
+    type: STRING
 
 exec:
   - python

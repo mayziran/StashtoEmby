@@ -177,6 +177,18 @@ def main():
     upload_mode = config.get("upload_mode", 1)  # Hook 固定使用 mode=1（覆盖模式）
     stash_url = config.get("stash_url", "http://localhost:9999")
     
+    # 解析延迟配置（格式："35,70"）
+    worker_delays_str = config.get("worker_delays", "35,70")
+    try:
+        delays_parts = worker_delays_str.split(",")
+        stash_wait = int(delays_parts[0].strip()) if len(delays_parts) > 0 else 35
+        emby_wait = int(delays_parts[1].strip()) if len(delays_parts) > 1 else 70
+    except Exception as e:
+        log_error(f"解析延迟配置失败：{e}，使用默认值 35,70")
+        stash_wait, emby_wait = 35, 70
+    
+    log_info(f"延迟配置：等待 Stash 更新 {stash_wait}秒，等待 Emby 刷新 {emby_wait}秒")
+
     if not emby_server or not emby_api_key:
         log_error("Emby 服务器地址或 API 密钥未配置")
         sys.exit(1)
@@ -188,19 +200,19 @@ def main():
     
     actor_name = performer.get("name", "")
     log_info(f"获取到演员信息：{actor_name}")
-    
+
     # 阶段 1: 等待
-    log_info("【阶段 1/4】等待 Stash 完成后续操作...")
-    time.sleep(35)
+    log_info(f"【阶段 1/4】等待 Stash 更新演员影片信息 ({stash_wait}秒)...")
+    time.sleep(stash_wait)
 
     # 阶段 2: 刷新 Emby
     log_info("【阶段 2/4】刷新 Emby 演员库...")
     refresh_emby_library(emby_server, emby_api_key)
 
     # 阶段 3: 等待 Emby 刷新完成
-    log_info("【阶段 3/4】等待 Emby 刷新完成...")
-    time.sleep(70)
-    
+    log_info(f"【阶段 3/4】等待 Emby 刷新演员库 ({emby_wait}秒)...")
+    time.sleep(emby_wait)
+
     # 阶段 4: 上传演员信息（带重试）
     log_info("【阶段 4/4】上传演员信息到 Emby...")
     

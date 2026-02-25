@@ -218,6 +218,10 @@ def _get_emby_need(
     elif upload_mode == 4:  # 补缺模式：根据缓存计算
         if performer_name in emby_cache:
             status = emby_cache[performer_name]
+            # 演员不存在于 Emby，跳过（补缺模式只补缺，不创建新演员）
+            if not status.get("actor_exists", False):
+                log.info(f"[{PLUGIN_ID}] 演员 {performer_name} 在 Emby 中不存在，补缺模式跳过")
+                return False, 0
             need_image = status["need_image"]
             need_metadata = status["need_metadata"]
             if need_image and need_metadata:

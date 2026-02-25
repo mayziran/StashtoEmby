@@ -98,6 +98,7 @@ def load_settings(stash: StashInterface, for_hook: bool = False, for_task: bool 
     emby_api_key = _get_val("embyApiKey", "")
     dry_run = bool(_get_val("dryRun", False))
     enable_worker_log = bool(_get_val("enableWorkerLog", True))
+    worker_delays = _get_val("workerDelays", "35,70")
 
     log.info(
         f"Loaded settings: actor_output_dir='{actor_output_dir}', "
@@ -167,6 +168,7 @@ def load_settings(stash: StashInterface, for_hook: bool = False, for_task: bool 
         "emby_api_key": emby_api_key,
         "dry_run": dry_run,
         "enableWorkerLog": enable_worker_log,
+        "workerDelays": worker_delays,
         "local_exporter": local_exporter,
         "emby_uploader": emby_uploader,
     }
@@ -183,6 +185,7 @@ def start_async_worker(performer_id: int, settings: Dict[str, Any]) -> None:
         "server_connection": settings.get("server_connection", {}),
         "upload_mode": 1,
         "enable_worker_log": settings.get("enableWorkerLog", True),
+        "worker_delays": settings.get("workerDelays", "35,70"),
         "stash_url": f"http://{settings.get('server_connection', {}).get('Host', 'localhost')}:{settings.get('server_connection', {}).get('Port', '9999')}"
     }
 
