@@ -263,6 +263,7 @@ def _process_performer(
     """
     performer_name = performer.get("name")
     if not performer_name:
+        log.warning(f"[{PLUGIN_ID}] 演员 ID {performer.get('id')} 没有名称，跳过处理")
         return False, False, True, True
 
     # 判断需求
@@ -349,6 +350,10 @@ def handle_task(
                       (export_mode == 4 and upload_mode == 0) or \
                       (export_mode == 0 and upload_mode == 4)
 
+    # 判断是否需要补缺检查（用于提取批量检查逻辑）
+    need_local_check = (export_mode == 4)
+    need_emby_check = (upload_mode == 4)
+
     per_page = 1000
     page = 1
 
@@ -398,27 +403,32 @@ def handle_task(
 
         page_total = len(page_performers)
 
-        # 第 2 步：批量检查缺失（只在批量检查模式下使用）
-        if use_batch_check:
+        # 第 2 步：批量检查缺失（批量检查模式或混合模式需要）
+        # 提取到分支外，避免代码重复
+        if need_local_check and local_exporter and not local_missing_cache:
             performer_names = [p.get("name") for p in page_performers if p.get("name")]
+            local_missing_cache = _check_local_missing_batch(performer_names, settings.get("actor_output_dir", ""))
+            if use_batch_check:
+                local_missing_count = sum(1 for v in local_missing_cache.values() if v['need_nfo'] or v['need_image'])
+                log.info(f"[{PLUGIN_ID}] 本地缺失检查：{local_missing_count} 位演员需要处理")
+            else:
+                log.info(f"[{PLUGIN_ID}] 本地缺失检查结果：{sum(1 for v in local_missing_cache.values() if v['need_nfo'] or v['need_image'])} 个演员需要处理")
 
-            if export_mode == 4 and local_exporter:
-                if not local_missing_cache:
-                    local_missing_cache = _check_local_missing_batch(performer_names, settings.get("actor_output_dir", ""))
-                    local_missing_count = sum(1 for v in local_missing_cache.values() if v['need_nfo'] or v['need_image'])
-                    log.info(f"[{PLUGIN_ID}] 本地缺失检查：{local_missing_count} 位演员需要处理")
+        if need_emby_check and emby_uploader and not emby_missing_cache:
+            performer_names = [p.get("name") for p in page_performers if p.get("name")]
+            emby_missing_cache = _check_emby_missing_batch(
+                performer_names,
+                settings.get("emby_server", ""),
+                settings.get("emby_api_key", "")
+            )
+            if use_batch_check:
+                emby_missing_count = sum(1 for v in emby_missing_cache.values() if v['need_image'] or v['need_metadata'])
+                log.info(f"[{PLUGIN_ID}] Emby 缺失检查：{emby_missing_count} 位演员需要处理")
+            else:
+                log.info(f"[{PLUGIN_ID}] Emby 缺失检查结果：{sum(1 for v in emby_missing_cache.values() if v['need_image'] or v['need_metadata'])} 个演员需要处理")
 
-            if upload_mode == 4 and emby_uploader:
-                if not emby_missing_cache:
-                    emby_missing_cache = _check_emby_missing_batch(
-                        performer_names,
-                        settings.get("emby_server", ""),
-                        settings.get("emby_api_key", "")
-                    )
-                    emby_missing_count = sum(1 for v in emby_missing_cache.values() if v['need_image'] or v['need_metadata'])
-                    log.info(f"[{PLUGIN_ID}] Emby 缺失检查：{emby_missing_count} 位演员需要处理")
-
-            # 第 3 步：筛选出需要处理的演员 ID
+        # 第 3 步：筛选需要处理的演员 ID
+        if use_batch_check:
             current_page_ids = []
             for performer in page_performers:
                 performer_id = performer.get("id")
@@ -435,11 +445,18 @@ def handle_task(
                     actors_skipped += 1
 
             total_actors += len(page_performers)
-            log.info(f"[{PLUGIN_ID}] 需处理演员：{len(current_page_ids)}/{len(page_performers)}")
+            if current_page_ids:
+                log.info(f"[{PLUGIN_ID}] 需处理演员：{len(current_page_ids)}/{len(page_performers)}")
+        else:
+            # 覆盖模式：处理所有演员
+            current_page_ids = [p.get("id") for p in page_performers if p.get("id")]
+            total_actors += len(page_performers)
 
-            # 第 4 步：处理需要处理的演员（逐个获取完整数据）
-            for performer_id in current_page_ids:
-                try:
+        # 第 4 步：处理演员（统一逻辑）
+        for performer_id in current_page_ids:
+            try:
+                # 批量检查模式：获取完整数据；覆盖模式：已有完整数据
+                if use_batch_check:
                     performer = stash.find_performer(performer_id)
                     if not performer:
                         log.error(f"找不到演员 ID: {performer_id}")
@@ -447,89 +464,39 @@ def handle_task(
                         emby_fail_count += 1
                         actors_processed += 1
                         continue
-
-                    need_local, need_emby, local_success, emby_success = _process_performer(
-                        performer, export_mode, upload_mode,
-                        local_missing_cache, emby_missing_cache,
-                        local_exporter, emby_uploader, settings
-                    )
-
-                    # 统计
-                    if need_local or need_emby:
-                        actors_processed += 1
-                        if need_local:
-                            if local_success:
-                                local_ok_count += 1
-                            else:
-                                local_fail_count += 1
-                        if need_emby:
-                            if emby_success:
-                                emby_ok_count += 1
-                            else:
-                                emby_fail_count += 1
-
-                except Exception as e:
-                    log.error(f"获取缺失演员完整数据失败：{e}")
-                    local_fail_count += 1
-                    emby_fail_count += 1
-                    actors_processed += 1
-
-        else:
-            # 非批量检查模式：已获取完整数据，直接处理
-            # 如果需要补缺，先批量检查缺失
-            if export_mode == 4 and local_exporter:
-                performer_names = [p.get("name") for p in page_performers if p.get("name")]
-                if not local_missing_cache:
-                    log.info(f"[{PLUGIN_ID}] 批量检查本地缺失...")
-                    local_missing_cache = _check_local_missing_batch(performer_names, settings.get("actor_output_dir", ""))
-                    log.info(f"[{PLUGIN_ID}] 本地缺失检查结果：{sum(1 for v in local_missing_cache.values() if v['need_nfo'] or v['need_image'])} 个演员需要处理")
-
-            if upload_mode == 4 and emby_uploader:
-                performer_names = [p.get("name") for p in page_performers if p.get("name")]
-                if not emby_missing_cache:
-                    log.info(f"[{PLUGIN_ID}] 批量检查 Emby 缺失...")
-                    emby_missing_cache = _check_emby_missing_batch(
-                        performer_names,
-                        settings.get("emby_server", ""),
-                        settings.get("emby_api_key", "")
-                    )
-                    log.info(f"[{PLUGIN_ID}] Emby 缺失检查结果：{sum(1 for v in emby_missing_cache.values() if v['need_image'] or v['need_metadata'])} 个演员需要处理")
-
-            # 处理当前页演员
-            total_actors += len(page_performers)
-
-            for performer in page_performers:
-                try:
-                    if not performer.get("id"):
+                else:
+                    # 从 page_performers 中查找
+                    performer = next((p for p in page_performers if p.get("id") == performer_id), None)
+                    if not performer:
                         continue
 
-                    need_local, need_emby, local_success, emby_success = _process_performer(
-                        performer, export_mode, upload_mode,
-                        local_missing_cache, emby_missing_cache,
-                        local_exporter, emby_uploader, settings
-                    )
+                need_local, need_emby, local_success, emby_success = _process_performer(
+                    performer, export_mode, upload_mode,
+                    local_missing_cache, emby_missing_cache,
+                    local_exporter, emby_uploader, settings
+                )
 
-                    # 统计
-                    if need_local or need_emby:
-                        actors_processed += 1
-                        if need_local:
-                            if local_success:
-                                local_ok_count += 1
-                            else:
-                                local_fail_count += 1
-                        if need_emby:
-                            if emby_success:
-                                emby_ok_count += 1
-                            else:
-                                emby_fail_count += 1
-                    else:
-                        actors_skipped += 1
-
-                except Exception as e:
-                    log.error(f"处理演员 {performer.get('name', 'Unknown')} 失败：{e}")
-                    local_fail_count += 1
-                    emby_fail_count += 1
+                # 统计
+                if need_local or need_emby:
                     actors_processed += 1
+                    if need_local:
+                        if local_success:
+                            local_ok_count += 1
+                        else:
+                            local_fail_count += 1
+                    if need_emby:
+                        if emby_success:
+                            emby_ok_count += 1
+                        else:
+                            emby_fail_count += 1
+                elif not use_batch_check:
+                    actors_skipped += 1
+
+            except Exception as e:
+                log.error(f"处理演员 ID {performer_id} 失败：{e}")
+                local_fail_count += 1
+                emby_fail_count += 1
+                actors_processed += 1
 
         # 每页完成后显示进度
         task_log_func(f"第{page}批完成：处理 {actors_processed} 位演员",
