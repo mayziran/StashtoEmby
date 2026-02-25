@@ -55,37 +55,8 @@ def _get_emby_user_id(emby_server: str, emby_api_key: str) -> Optional[str]:
     return None
 
 
-def _get_image_content_type(image_data: bytes) -> str:
-    """
-    根据图片数据的文件头判断 Content-Type
-
-    支持格式：JPEG, PNG, WEBP, GIF
-    默认返回：image/jpeg
-    """
-    # 检查文件头（magic bytes）
-    # JPEG: FF D8 FF
-    if len(image_data) >= 3 and image_data[0:3] == b'\xff\xd8\xff':
-        return 'image/jpeg'
-    # PNG: 89 50 4E 47 0D 0A 1A 0A
-    elif len(image_data) >= 8 and image_data[0:8] == b'\x89PNG\r\n\x1a\n':
-        return 'image/png'
-    # WEBP: RIFF [4 字节] WEBP
-    elif len(image_data) >= 12 and image_data[0:4] == b'RIFF' and image_data[8:12] == b'WEBP':
-        return 'image/webp'
-    # GIF: GIF87a 或 GIF89a
-    elif len(image_data) >= 6 and (image_data[0:6] == b'GIF87a' or image_data[0:6] == b'GIF89a'):
-        return 'image/gif'
-    else:
-        # 默认返回 JPEG
-        log.warning(f"无法识别图片格式，使用默认 image/jpeg")
-        return 'image/jpeg'
-
-
-def _upload_image_to_emby(emby_server: str, emby_api_key: str, actor_id: str, name: str, image_data: bytes) -> bool:
+def _upload_image_to_emby(emby_server: str, emby_api_key: str, actor_id: str, name: str, image_data: bytes, content_type: str = "image/jpeg") -> bool:
     """上传图片到 Emby"""
-    # 根据图片数据判断格式
-    content_type = _get_image_content_type(image_data)
-    
     # Base64 编码
     b6_pic = base64.b64encode(image_data)
 
@@ -383,7 +354,9 @@ def upload_actor_to_emby(
                 try:
                     resp = session.get(abs_url, timeout=30)
                     if resp.status_code == 200:
-                        _upload_image_to_emby(emby_server, emby_api_key, actor_id, name, resp.content)
+                        # 使用 Stash 返回的 Content-Type
+                        content_type = resp.headers.get("Content-Type", "image/jpeg")
+                        _upload_image_to_emby(emby_server, emby_api_key, actor_id, name, resp.content, content_type)
                     else:
                         log.error(f"从 Stash 获取演员 {name} 图片失败，状态码：{resp.status_code}")
                 except Exception as e:
