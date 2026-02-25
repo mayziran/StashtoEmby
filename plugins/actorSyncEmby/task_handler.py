@@ -126,10 +126,13 @@ def _check_emby_missing_batch(performer_names: list, emby_server: str, emby_api_
                 continue
 
             # 获取详细信息
-            if user_id:
-                item_detail_url = f"{emby_server}/emby/Users/{user_id}/Items/{person_id}"
-            else:
-                item_detail_url = f"{emby_server}/emby/Items/{person_id}"
+            if not user_id:
+                # 获取不到用户 ID，无法检查演员信息
+                log.error(f"无法获取 Emby 用户 ID，演员 {name} 标记为缺失")
+                # result 保持默认值 {"need_image": True, "need_metadata": True, "actor_exists": False}
+                continue
+
+            item_detail_url = f"{emby_server}/emby/Users/{user_id}/Items/{person_id}"
 
             params = {
                 "api_key": emby_api_key,

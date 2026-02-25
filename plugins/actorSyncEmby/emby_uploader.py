@@ -23,6 +23,39 @@ import stashapi.log as log
 from utils import safe_segment, build_absolute_url, build_requests_session
 
 
+# Emby 用户 ID 缓存（避免重复获取）
+_emby_user_cache = {}  # {cache_key: user_id}
+
+
+def _get_emby_user_id(emby_server: str, emby_api_key: str) -> Optional[str]:
+    """
+    获取 Emby 用户 ID（带缓存）
+
+    Args:
+        emby_server: Emby 服务器地址
+        emby_api_key: Emby API 密钥
+
+    Returns:
+        用户 ID，获取失败返回 None
+    """
+    cache_key = f"{emby_server}_{emby_api_key}"
+    if cache_key in _emby_user_cache:
+        return _emby_user_cache[cache_key]
+
+    users_url = f"{emby_server}/emby/Users?api_key={emby_api_key}"
+    try:
+        users_response = requests.get(users_url, timeout=10)
+        if users_response.status_code == 200:
+            users_data = users_response.json()
+            if users_data:
+                user_id = users_data[0]['Id']
+                _emby_user_cache[cache_key] = user_id
+                return user_id
+    except Exception as e:
+        log.error(f"获取 Emby 用户 ID 失败：{e}")
+    return None
+
+
 def _upload_image_to_emby(emby_server: str, emby_api_key: str, actor_id: str, img_path: str, name: str, sync_mode: int = 1, image_data: Optional[bytes] = None) -> bool:
     """
     通用的图片上传函数，供所有同步模式使用
@@ -68,27 +101,11 @@ def update_actor_metadata_in_emby(performer: Dict[str, Any], actor_id: str, emby
         log.error("演员名称为空，无法更新元数据")
         return
 
-    # 获取 Emby 用户 ID，用于后续 API 调用
-    users_url = f"{emby_server}/emby/Users?api_key={emby_api_key}"
-    try:
-        users_response = requests.get(users_url)
-    except requests.exceptions.RequestException as e:
-        log.error(f"获取 Emby 用户列表时发生网络错误：{e}")
+    # 获取 Emby 用户 ID（使用缓存）
+    user_id = _get_emby_user_id(emby_server, emby_api_key)
+    if not user_id:
+        log.error("无法获取 Emby 用户 ID，无法更新元数据")
         return
-    if users_response.status_code != 200:
-        log.error(f"无法获取 Emby 用户列表，状态码：{users_response.status_code}")
-        return
-
-    try:
-        users_data = users_response.json()
-    except ValueError as e:
-        log.error(f"解析 Emby 用户列表 JSON 时发生错误：{e}")
-        return
-    if not users_data:
-        log.error("Emby 中没有找到任何用户")
-        return
-
-    user_id = users_data[0]['Id']
 
     # 直接使用传入的 actor_id，不再重新搜索
     found_actor_id = actor_id
