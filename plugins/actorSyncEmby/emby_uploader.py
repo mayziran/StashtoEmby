@@ -76,10 +76,13 @@ def _upload_image_to_emby(emby_server: str, emby_api_key: str, actor_id: str, im
     headers = {'Content-Type': 'image/jpg'}
 
     try:
-        r_upload = requests.post(url=upload_url, data=b6_pic, headers=headers)
+        r_upload = requests.post(url=upload_url, data=b6_pic, headers=headers, timeout=60)
+    except requests.exceptions.Timeout:
+        log.error(f"上传演员 {name} 头像到 Emby 超时（60 秒）")
+        raise
     except requests.exceptions.RequestException as e:
         log.error(f"上传演员 {name} 头像到 Emby 时发生网络错误：{e}")
-        return False
+        raise
 
     if r_upload.status_code in [200, 204]:
         log.info(f"成功上传演员 {name} 的头像到 Emby (模式{sync_mode})")
@@ -94,7 +97,8 @@ def update_actor_metadata_in_emby(performer: Dict[str, Any], actor_id: str, emby
     更新 Emby 中演员的元数据。
     """
     if not emby_server or not emby_api_key:
-        return
+        log.error("Emby 服务器地址或 API 密钥未配置")
+        raise
 
     name = performer.get("name", "")
     if not name:
@@ -105,7 +109,7 @@ def update_actor_metadata_in_emby(performer: Dict[str, Any], actor_id: str, emby
     user_id = _get_emby_user_id(emby_server, emby_api_key)
     if not user_id:
         log.error("无法获取 Emby 用户 ID，无法更新元数据")
-        return
+        raise
 
     # 直接使用传入的 actor_id，不再重新搜索
     found_actor_id = actor_id
@@ -114,14 +118,17 @@ def update_actor_metadata_in_emby(performer: Dict[str, Any], actor_id: str, emby
     # 获取演员完整信息 - 使用传入的 ID
     get_url = f"{emby_server}/emby/Users/{user_id}/Items/{found_actor_id}?api_key={emby_api_key}"
     try:
-        r_get = requests.get(get_url)
+        r_get = requests.get(get_url, timeout=30)
+    except requests.exceptions.Timeout:
+        log.error(f"获取演员 {performer.get('name')} 完整信息超时（30 秒）")
+        raise
     except requests.exceptions.RequestException as e:
         log.error(f"获取演员 {performer.get('name')} 完整信息时发生网络错误：{e}")
-        return
+        raise
     if r_get.status_code != 200:
         log.error(f"无法获取演员 {performer.get('name')} 的完整信息，状态码：{r_get.status_code}")
         log.info(f"响应内容：{r_get.text}")
-        return
+        raise
     try:
         person_data = r_get.json()
     except ValueError as e:
@@ -275,14 +282,19 @@ def update_actor_metadata_in_emby(performer: Dict[str, Any], actor_id: str, emby
     # 使用 POST 方法更新到 Items 端点
     update_url = f"{emby_server}/emby/Items/{found_actor_id}?api_key={emby_api_key}"
     try:
-        r2 = requests.post(update_url, json=person_data, headers={"Content-Type": "application/json"})
+        r2 = requests.post(update_url, json=person_data, headers={"Content-Type": "application/json"}, timeout=30)
         if r2.status_code in [200, 204]:
             log.info(f"成功更新演员 {performer.get('name')} 的元数据")
         else:
             log.error(f"更新演员 {performer.get('name')} 元数据失败，状态码：{r2.status_code}")
             log.info(f"响应内容：{r2.text}")
+            raise
+    except requests.exceptions.Timeout:
+        log.error(f"更新演员 {performer.get('name')} 元数据超时（30 秒）")
+        raise
     except requests.exceptions.RequestException as e:
         log.error(f"更新演员 {performer.get('name')} 元数据失败：{e}")
+        raise
 
 
 def upload_actor_to_emby(
@@ -308,8 +320,8 @@ def upload_actor_to_emby(
             3 = 只上传图片
     """
     if not emby_server or not emby_api_key:
-        log.error("Emby 服务器地址或 API 密钥未配置，跳过上传")
-        return
+        log.error("Emby 服务器地址或 API 密钥未配置")
+        raise
 
     name = performer.get("name")
     if not name:
@@ -322,17 +334,20 @@ def upload_actor_to_emby(
         persons_url = f'{emby_server}/emby/Persons/{encoded_name}?api_key={emby_api_key}'
 
         try:
-            r = requests.get(persons_url)
+            r = requests.get(persons_url, timeout=30)
+        except requests.exceptions.Timeout:
+            log.error(f"查找演员 {name} 超时（30 秒）")
+            raise
         except requests.exceptions.RequestException as e:
             log.error(f"获取演员 {name} 信息时发生网络错误：{e}")
-            return
+            raise
 
         if r.status_code == 404:
             log.info(f"演员 {name} 在 Emby Persons 中不存在，跳过上传")
             return
         elif r.status_code != 200:
             log.error(f"获取演员 {name} 信息失败，状态码：{r.status_code}")
-            return
+            raise
 
         data = r.json()
         actor_id = data['Id']
