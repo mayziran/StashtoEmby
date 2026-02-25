@@ -404,28 +404,22 @@ def handle_task(
         page_total = len(page_performers)
 
         # 第 2 步：批量检查缺失（批量检查模式或混合模式需要）
-        # 提取到分支外，避免代码重复
+        # 提前生成演员名称列表，避免重复
+        performer_names = [p.get("name") for p in page_performers if p.get("name")]
+
         if need_local_check and local_exporter and not local_missing_cache:
-            performer_names = [p.get("name") for p in page_performers if p.get("name")]
             local_missing_cache = _check_local_missing_batch(performer_names, settings.get("actor_output_dir", ""))
-            if use_batch_check:
-                local_missing_count = sum(1 for v in local_missing_cache.values() if v['need_nfo'] or v['need_image'])
-                log.info(f"[{PLUGIN_ID}] 本地缺失检查：{local_missing_count} 位演员需要处理")
-            else:
-                log.info(f"[{PLUGIN_ID}] 本地缺失检查结果：{sum(1 for v in local_missing_cache.values() if v['need_nfo'] or v['need_image'])} 个演员需要处理")
+            local_count = sum(1 for v in local_missing_cache.values() if v['need_nfo'] or v['need_image'])
+            log.info(f"[{PLUGIN_ID}] 本地缺失检查：{local_count} 位演员需要处理")
 
         if need_emby_check and emby_uploader and not emby_missing_cache:
-            performer_names = [p.get("name") for p in page_performers if p.get("name")]
             emby_missing_cache = _check_emby_missing_batch(
                 performer_names,
                 settings.get("emby_server", ""),
                 settings.get("emby_api_key", "")
             )
-            if use_batch_check:
-                emby_missing_count = sum(1 for v in emby_missing_cache.values() if v['need_image'] or v['need_metadata'])
-                log.info(f"[{PLUGIN_ID}] Emby 缺失检查：{emby_missing_count} 位演员需要处理")
-            else:
-                log.info(f"[{PLUGIN_ID}] Emby 缺失检查结果：{sum(1 for v in emby_missing_cache.values() if v['need_image'] or v['need_metadata'])} 个演员需要处理")
+            emby_count = sum(1 for v in emby_missing_cache.values() if v['need_image'] or v['need_metadata'])
+            log.info(f"[{PLUGIN_ID}] Emby 缺失检查：{emby_count} 位演员需要处理")
 
         # 第 3 步：筛选需要处理的演员 ID
         if use_batch_check:
