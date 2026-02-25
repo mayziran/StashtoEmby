@@ -11,7 +11,6 @@ Emby 上传模块 - 将演员信息上传到 Emby 服务器
 
 import base64
 import json
-import time
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 from urllib.parse import quote
