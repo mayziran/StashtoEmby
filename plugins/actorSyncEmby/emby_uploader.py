@@ -11,7 +11,6 @@ Emby 上传模块 - 将演员信息上传到 Emby 服务器
 
 import base64
 import json
-import os
 import time
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
@@ -56,24 +55,43 @@ def _get_emby_user_id(emby_server: str, emby_api_key: str) -> Optional[str]:
     return None
 
 
-def _upload_image_to_emby(emby_server: str, emby_api_key: str, actor_id: str, img_path: str, name: str, sync_mode: int = 1, image_data: Optional[bytes] = None) -> bool:
+def _get_image_content_type(image_data: bytes) -> str:
     """
-    通用的图片上传函数，供所有同步模式使用
+    根据图片数据的文件头判断 Content-Type
 
-    Args:
-        img_path: 本地文件路径（如果 image_data 为 None 则使用此参数）
-        image_data: 直接传入图片二进制数据（如果提供则忽略 img_path）
+    支持格式：JPEG, PNG, WEBP, GIF
+    默认返回：image/jpeg
     """
-    # 如果提供了 image_data，直接使用；否则从文件读取
-    if image_data is not None:
-        b6_pic = base64.b64encode(image_data)
+    # 检查文件头（magic bytes）
+    # JPEG: FF D8 FF
+    if len(image_data) >= 3 and image_data[0:3] == b'\xff\xd8\xff':
+        return 'image/jpeg'
+    # PNG: 89 50 4E 47 0D 0A 1A 0A
+    elif len(image_data) >= 8 and image_data[0:8] == b'\x89PNG\r\n\x1a\n':
+        return 'image/png'
+    # WEBP: RIFF [4 字节] WEBP
+    elif len(image_data) >= 12 and image_data[0:4] == b'RIFF' and image_data[8:12] == b'WEBP':
+        return 'image/webp'
+    # GIF: GIF87a 或 GIF89a
+    elif len(image_data) >= 6 and (image_data[0:6] == b'GIF87a' or image_data[0:6] == b'GIF89a'):
+        return 'image/gif'
     else:
-        with open(img_path, 'rb') as f:
-            b6_pic = base64.b64encode(f.read())
+        # 默认返回 JPEG
+        log.warning(f"无法识别图片格式，使用默认 image/jpeg")
+        return 'image/jpeg'
+
+
+def _upload_image_to_emby(emby_server: str, emby_api_key: str, actor_id: str, name: str, image_data: bytes) -> bool:
+    """上传图片到 Emby"""
+    # 根据图片数据判断格式
+    content_type = _get_image_content_type(image_data)
+    
+    # Base64 编码
+    b6_pic = base64.b64encode(image_data)
 
     # Persons（演员）使用直接 Items 端点
     upload_url = f'{emby_server}/emby/Items/{actor_id}/Images/Primary?api_key={emby_api_key}'
-    headers = {'Content-Type': 'image/jpg'}
+    headers = {'Content-Type': content_type}
 
     try:
         r_upload = requests.post(url=upload_url, data=b6_pic, headers=headers, timeout=60)
@@ -85,7 +103,7 @@ def _upload_image_to_emby(emby_server: str, emby_api_key: str, actor_id: str, im
         raise
 
     if r_upload.status_code in [200, 204]:
-        log.info(f"成功上传演员 {name} 的头像到 Emby (模式{sync_mode})")
+        log.info(f"成功上传演员 {name} 的头像到 Emby")
         return True
     else:
         log.error(f"上传演员 {name} 头像到 Emby 失败，状态码：{r_upload.status_code}")
@@ -365,7 +383,7 @@ def upload_actor_to_emby(
                 try:
                     resp = session.get(abs_url, timeout=30)
                     if resp.status_code == 200:
-                        _upload_image_to_emby(emby_server, emby_api_key, actor_id, None, name, sync_mode=1, image_data=resp.content)
+                        _upload_image_to_emby(emby_server, emby_api_key, actor_id, name, resp.content)
                     else:
                         log.error(f"从 Stash 获取演员 {name} 图片失败，状态码：{resp.status_code}")
                 except Exception as e:
