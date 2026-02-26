@@ -759,15 +759,9 @@ def process_scene(scene: Dict[str, Any], settings: Dict[str, Any]) -> int:
     return moved_count
 
 
-def get_all_scenes(stash: StashInterface, settings: Dict[str, Any], per_page: int = 1000) -> List[Dict[str, Any]]:
-    """
-    使用 stash.find_scenes 分页把所有 scenes 一次性拉成一个 list 返回，
-    方便在 IDE 里直接看变量调试。
-    """
-    all_scenes: List[Dict[str, Any]] = []
-    page = 1
-
-    fragment = """
+# 统一的 Scene Fragment，用于获取完整的场景信息（包含 NFO 写入需要的所有字段）
+# Task 模式和 Hook 模式都使用这个 Fragment
+SCENE_FRAGMENT = """
         id
         title
         code
@@ -876,7 +870,31 @@ def get_all_scenes(stash: StashInterface, settings: Dict[str, Any], per_page: in
           stash_id
           updated_at
         }
+"""
+
+
+def get_single_scene(stash: StashInterface, scene_id: int) -> Dict[str, Any] | None:
     """
+    获取单个场景的完整信息（使用统一的 Fragment）
+    Task 模式和 Hook 模式都使用这个函数
+    """
+    try:
+        scene = stash.find_scene(scene_id, fragment=SCENE_FRAGMENT)
+        return scene
+    except Exception as e:
+        log.error(f"Failed to fetch scene {scene_id}: {e}")
+        return None
+
+
+def get_all_scenes(stash: StashInterface, settings: Dict[str, Any], per_page: int = 1000) -> List[Dict[str, Any]]:
+    """
+    使用 stash.find_scenes 分页把所有 scenes 一次性拉成一个 list 返回，
+    方便在 IDE 里直接看变量调试。
+    """
+    all_scenes: List[Dict[str, Any]] = []
+    page = 1
+
+    fragment = SCENE_FRAGMENT
 
     # 检查是否设置了源目录映射
     source_target_mapping = settings.get("source_target_mapping", "").strip()
@@ -2053,33 +2071,8 @@ def handle_hook_or_task(stash: StashInterface, args: Dict[str, Any], settings: D
         scene_id = int(scene_id)
         log.info(f"[{PLUGIN_ID}] Hook mode, processing single scene id={scene_id}")
 
-        # 单个 scene 的详细信息可以重新用 find_scene 拉一下，也可以直接用 hookContext 里带的
-        scene = stash.find_scene(scene_id, fragment="""
-            id
-            organized
-            title
-            code
-            details
-            director
-            date
-            rating100
-            studio { id name image_path }
-            performers { id name disambiguation gender birthdate country eye_color height_cm measurements fake_tits }
-            tags { id name }
-            groups { group { id name } }
-            files { id path width height }
-            paths {
-              screenshot
-              preview
-              stream
-              webp
-              vtt
-              sprite
-              funscript
-              interactive_heatmap
-              caption
-            }
-        """)
+        # 使用统一的函数获取场景信息（和 Task 模式保持一致）
+        scene = get_single_scene(stash, scene_id)
 
         if not scene:
             msg = f"Scene {scene_id} not found"
