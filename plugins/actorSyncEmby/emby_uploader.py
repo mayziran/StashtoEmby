@@ -159,7 +159,7 @@ def update_actor_metadata_in_emby(performer: Dict[str, Any], actor_id: str, emby
     if performer.get('weight'):
         lines.append("体重：" + str(performer["weight"]) + " kg")
     if performer.get('measurements'):
-        lines.append("三围尺寸：" + performer["measurements"])
+        lines.append("三围：" + performer["measurements"])
     if performer.get('fake_tits'):
         lines.append("假奶：" + performer["fake_tits"])
     if performer.get('penis_length'):
@@ -183,6 +183,11 @@ def update_actor_metadata_in_emby(performer: Dict[str, Any], actor_id: str, emby
         aliases_str = " / ".join([alias for alias in alias_list if alias])
         if aliases_str:
             lines.append("别名：" + aliases_str)
+
+    # 添加简介信息
+    details = performer.get('details')
+    if details and details.strip():
+        lines.append("简介：" + details)
 
     # 添加 Urls 信息
     urls = performer.get('urls', [])
@@ -250,6 +255,17 @@ def update_actor_metadata_in_emby(performer: Dict[str, Any], actor_id: str, emby
         tag_items.append({"Name": f"体重:{performer['weight']}kg", "Id": None})
     if performer.get('penis_length'):
         tag_items.append({"Name": f"阴茎长度:{performer['penis_length']}cm", "Id": None})
+
+    # 添加 Stash 中的 tags
+    tags = performer.get('tags', [])
+    if tags and isinstance(tags, list):
+        for tag in tags:
+            if isinstance(tag, dict):
+                tag_name = tag.get('name')
+                if tag_name:
+                    tag_items.append({"Name": tag_name, "Id": None})
+            elif isinstance(tag, str):
+                tag_items.append({"Name": tag, "Id": None})
 
     if tag_items:
         person_data['TagItems'] = tag_items

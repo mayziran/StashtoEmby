@@ -90,28 +90,7 @@ def get_performer_from_stash(stash_url: str, stash_api_key: str, performer_id: s
     query = """
     query FindPerformer($id: ID!) {
         findPerformer(id: $id) {
-            id
-            name
-            image_path
-            gender
-            country
-            ethnicity
-            birthdate
-            death_date
-            career_length
-            height_cm
-            weight
-            measurements
-            fake_tits
-            penis_length
-            circumcised
-            eye_color
-            hair_color
-            tattoos
-            piercings
-            disambiguation
-            alias_list
-            urls
+            *
         }
     }
     """
