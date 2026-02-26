@@ -377,17 +377,11 @@ def handle_task(
     local_exporter = settings.get("local_exporter")
     emby_uploader = settings.get("emby_uploader")
 
-    # 定义字段模板
-    FULL_FRAGMENT = """
-        id name image_path gender country birthdate height_cm measurements
-        fake_tits disambiguation details ethnicity eye_color hair_color
-        career_length tattoos piercings weight death_date circumcised
-        penis_length alias_list urls
-    """
+    # 补缺模式用字段模板（只获取 id 和 name）
     BASIC_FRAGMENT = "id\nname"
 
     # 根据模式决定获取哪些字段
-    fragment = BASIC_FRAGMENT if use_batch_check else FULL_FRAGMENT
+    fragment = BASIC_FRAGMENT if use_batch_check else None
 
     while True:
         # 第 1 步：获取当前页演员数据
