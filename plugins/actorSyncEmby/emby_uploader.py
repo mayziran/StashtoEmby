@@ -24,6 +24,16 @@ from utils import safe_segment, build_absolute_url, build_requests_session
 # Emby 用户 ID 缓存（避免重复获取）
 _emby_user_cache = {}  # {cache_key: user_id}
 
+# 性别映射表（英文 -> 中文）
+GENDER_MAP_CN = {
+    'MALE': '男性',
+    'FEMALE': '女性',
+    'TRANSGENDER_MALE': '跨性别男性',
+    'TRANSGENDER_FEMALE': '跨性别女性',
+    'INTERSEX': '间性人',
+    'NON_BINARY': '非二元性别'
+}
+
 
 def _get_emby_user_id(emby_server: str, emby_api_key: str) -> Optional[str]:
     """
@@ -132,15 +142,7 @@ def update_actor_metadata_in_emby(performer: Dict[str, Any], actor_id: str, emby
     # 优先级较高的信息
     if performer.get('gender'):
         # 将英文性别转换为中文
-        gender_map_cn = {
-            'MALE': '男性',
-            'FEMALE': '女性',
-            'TRANSGENDER_MALE': '跨性别男性',
-            'TRANSGENDER_FEMALE': '跨性别女性',
-            'INTERSEX': '间性人',
-            'NON_BINARY': '非二元性别'
-        }
-        gender_cn = gender_map_cn.get(performer['gender'], performer['gender'])
+        gender_cn = GENDER_MAP_CN.get(performer['gender'], performer['gender'])
         lines.append("性别：" + gender_cn)
     if performer.get('country'):
         lines.append("国家：" + performer["country"])
@@ -230,15 +232,7 @@ def update_actor_metadata_in_emby(performer: Dict[str, Any], actor_id: str, emby
     tag_items = []
 
     if performer.get('gender'):
-        gender_map_cn = {
-            'MALE': '男性',
-            'FEMALE': '女性',
-            'TRANSGENDER_MALE': '跨性别男性',
-            'TRANSGENDER_FEMALE': '跨性别女性',
-            'INTERSEX': '间性人',
-            'NON_BINARY': '非二元性别'
-        }
-        gender_cn = gender_map_cn.get(performer['gender'], performer['gender'])
+        gender_cn = GENDER_MAP_CN.get(performer['gender'], performer['gender'])
         tag_items.append({"Name": f"性别:{gender_cn}", "Id": None})
     if performer.get('country'):
         tag_items.append({"Name": f"国家:{performer['country']}", "Id": None})
