@@ -86,11 +86,37 @@ def check_actor_exists_in_emby(emby_server: str, emby_api_key: str, actor_name: 
 
 
 def get_performer_from_stash(stash_url: str, stash_api_key: str, performer_id: str) -> Optional[Dict[str, Any]]:
-    """从 Stash API 获取演员信息"""
+    """从 Stash API 获取演员信息（只获取 24 个必要字段，和 Task/Hook 保持一致）"""
     query = """
     query FindPerformer($id: ID!) {
         findPerformer(id: $id) {
-            *
+            id
+            name
+            disambiguation
+            urls
+            gender
+            birthdate
+            ethnicity
+            country
+            eye_color
+            height_cm
+            measurements
+            fake_tits
+            penis_length
+            circumcised
+            career_length
+            tattoos
+            piercings
+            alias_list
+            details
+            death_date
+            hair_color
+            weight
+            image_path
+            tags {
+                id
+                name
+            }
         }
     }
     """
