@@ -11,6 +11,8 @@ Hook 模式 (hook_mode):
 
 from typing import Any, Dict, Optional
 
+from utils import PERFORMER_FRAGMENT_FOR_API
+
 
 def _export_local(performer: Dict[str, Any], settings: Dict[str, Any]) -> bool:
     """
@@ -121,8 +123,8 @@ def _process_hook_performer(
     import stashapi.log as log
     from actorSyncEmby import PLUGIN_ID
 
-    # 获取演员完整数据
-    performer = stash.find_performer(performer_id)
+    # 获取演员完整数据（使用自定义 fragment，只获取需要的 24 个字段）
+    performer = stash.find_performer(performer_id, fragment=PERFORMER_FRAGMENT_FOR_API)
     if not performer:
         msg = f"找不到演员 ID: {performer_id}"
         log.error(msg)

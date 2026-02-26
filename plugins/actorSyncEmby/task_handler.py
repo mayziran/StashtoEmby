@@ -14,6 +14,7 @@ from urllib.parse import quote
 
 import requests
 import stashapi.log as log
+from utils import PERFORMER_FRAGMENT_FOR_API
 
 # 插件 ID 常量
 PLUGIN_ID = "actorSyncEmby"
@@ -381,7 +382,12 @@ def handle_task(
     BASIC_FRAGMENT = "id\nname"
 
     # 根据模式决定获取哪些字段
-    fragment = BASIC_FRAGMENT if use_batch_check else None
+    # 补缺模式：先只获取 id+name，后续再获取完整数据
+    # 覆盖模式：直接获取完整的 24 个字段（使用自定义 fragment）
+    if use_batch_check:
+        fragment = BASIC_FRAGMENT
+    else:
+        fragment = PERFORMER_FRAGMENT_FOR_API
 
     while True:
         # 第 1 步：获取当前页演员数据
@@ -448,7 +454,8 @@ def handle_task(
             try:
                 # 批量检查模式：获取完整数据；覆盖模式：已有完整数据
                 if use_batch_check:
-                    performer = stash.find_performer(performer_id)
+                    # 使用自定义 fragment 获取演员完整数据（只获取需要的 24 个字段）
+                    performer = stash.find_performer(performer_id, fragment=PERFORMER_FRAGMENT_FOR_API)
                     if not performer:
                         log.error(f"找不到演员 ID: {performer_id}")
                         local_fail_count += 1

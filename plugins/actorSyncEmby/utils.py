@@ -8,6 +8,38 @@ from typing import Any, Dict
 import requests
 
 
+# stashapi 使用的 fragment 字符串（用于 find_performer 的 fragment 参数）
+# 仅包含 emby_uploader 和 local_exporter 实际使用的字段（共 24 个）
+# 避免获取不必要的数据（如 scene_count、关联对象等）
+PERFORMER_FRAGMENT_FOR_API = """    id
+    name
+    disambiguation
+    urls
+    gender
+    birthdate
+    ethnicity
+    country
+    eye_color
+    height_cm
+    measurements
+    fake_tits
+    penis_length
+    circumcised
+    career_length
+    tattoos
+    piercings
+    alias_list
+    details
+    death_date
+    hair_color
+    weight
+    image_path
+    tags {
+        id
+        name
+    }"""
+
+
 def safe_segment(segment: str) -> str:
     """简单清理路径段，避免出现奇怪字符。"""
     segment = segment.strip().replace("\\", "_").replace("/", "_")
