@@ -8,7 +8,7 @@ using Emby.Plugin.StashBox.Configuration;
 
 namespace Emby.Plugin.StashBox
 {
-    public class Plugin : BasePluginSimpleUI<PluginConfiguration>
+    public class Plugin : BasePlugin
     {
         public Plugin(IApplicationHost applicationHost, ILogManager logger)
             : base(applicationHost)
@@ -29,6 +29,17 @@ namespace Emby.Plugin.StashBox
 
         public override Guid Id => Guid.Parse("a1b2c3d4-e5f6-7890-abcd-ef1234567890");
 
-        public PluginConfiguration Configuration => this.GetOptions();
+        private PluginConfiguration _configuration;
+        public PluginConfiguration Configuration
+        {
+            get
+            {
+                if (_configuration == null)
+                {
+                    _configuration = (PluginConfiguration)this.GetOptions();
+                }
+                return _configuration;
+            }
+        }
     }
 }
