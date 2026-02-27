@@ -21,6 +21,8 @@ namespace Emby.Plugin.StashBox
 
         public override Guid Id => Guid.Parse("a1b2c3d4-e5f6-7890-abcd-ef1234567890");
 
+        public new PluginConfiguration Configuration => base.Configuration;
+
         public IEnumerable<PluginPageInfo> GetPages()
             => new[]
             {
