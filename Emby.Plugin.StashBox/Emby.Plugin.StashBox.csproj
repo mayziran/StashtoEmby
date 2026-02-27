@@ -39,6 +39,4 @@
     <EmbeddedResource Include="Configuration\configPage.html" />
   </ItemGroup>
 
-  <Import Project="ILRepack.targets" Condition="'$(Configuration)'=='Release' or '$(Configuration)'=='Release.Emby'" />
-
 </Project>
