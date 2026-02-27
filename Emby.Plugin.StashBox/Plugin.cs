@@ -8,7 +8,7 @@ using Emby.Plugin.StashBox.Configuration;
 
 namespace Emby.Plugin.StashBox
 {
-    public class Plugin : BasePlugin<PluginConfiguration>, IHasConfigurationPage
+    public class Plugin : BasePlugin<PluginConfiguration>
     {
         public Plugin() : base(null, null)
         {
@@ -32,7 +32,5 @@ namespace Emby.Plugin.StashBox
                     EmbeddedResourcePath = $"{this.GetType().Namespace}.Configuration.configPage.html",
                 },
             };
-
-        public string ConfigurationPage => this.Name;
     }
 }

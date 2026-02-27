@@ -24,6 +24,11 @@ namespace Emby.Plugin.StashBox.ExternalIds
         public string Key => "stashdb";
 
         /// <summary>
+        /// URL 格式字符串
+        /// </summary>
+        public string UrlFormatString => "{0}/scenes/{1}";
+
+        /// <summary>
         /// 网站地址
         /// </summary>
         public string Website => Plugin.Instance?.Configuration?.DefaultEndpoint?.Replace("/graphql", "") ?? "https://stashdb.org";
@@ -63,7 +68,7 @@ namespace Emby.Plugin.StashBox.ExternalIds
                     var baseUrl = GetBaseUrlFromEndpoint(endpoint);
                     if (!string.IsNullOrEmpty(baseUrl) && !string.IsNullOrEmpty(stashId))
                     {
-                        return baseUrl + "/scenes/" + stashId;
+                        return string.Format(UrlFormatString, baseUrl, stashId);
                     }
                 }
                 else if (parts.Length == 1)
@@ -73,7 +78,7 @@ namespace Emby.Plugin.StashBox.ExternalIds
                     if (!string.IsNullOrEmpty(stashId))
                     {
                         var baseUrl = GetBaseUrlFromEndpoint(null);
-                        return baseUrl + "/scenes/" + stashId;
+                        return string.Format(UrlFormatString, baseUrl, stashId);
                     }
                 }
             }
