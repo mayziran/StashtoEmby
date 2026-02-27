@@ -5,10 +5,21 @@
     <AssemblyName>Emby.Plugin.StashBox</AssemblyName>
     <RootNamespace>Emby.Plugin.StashBox</RootNamespace>
     <Configurations>Debug;Release;Release.Emby;Debug.Emby</Configurations>
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
   </PropertyGroup>
 
-  <PropertyGroup Condition="'$(Configuration)' == 'Release.Emby'">
+  <PropertyGroup Condition="'$(Configuration)'=='Debug.Emby'">
+    <DefineConstants>DEBUG;__EMBY__</DefineConstants>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)'=='Release.Emby'">
     <DefineConstants>__EMBY__</DefineConstants>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)'=='Release' or '$(Configuration)'=='Release.Emby'">
+    <Optimize>true</Optimize>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <WarningsAsErrors>NU1605</WarningsAsErrors>
   </PropertyGroup>
 
   <ItemGroup>
@@ -17,9 +28,18 @@
     <PackageReference Include="StandardSocketsHttpHandler" Version="2.2.0.10" />
   </ItemGroup>
 
+  <ItemGroup Condition="'$(Configuration)'=='Release' or '$(Configuration)'=='Release.Emby'">
+    <PackageReference Include="ILRepack.Lib.MSBuild.Task" Version="2.0.44.1">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
   <ItemGroup>
     <None Remove="Configuration\configPage.html" />
     <EmbeddedResource Include="Configuration\configPage.html" />
   </ItemGroup>
+
+  <Import Project="ILRepack.targets" Condition="'$(Configuration)'=='Release' or '$(Configuration)'=='Release.Emby'" />
 
 </Project>
