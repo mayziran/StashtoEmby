@@ -8,50 +8,40 @@
         <div data-role="content">
             <div class="content-primary">
                 <h1>StashBox</h1>
-                <p class="description">
-                    支持多个 Stash-Box 实例的外部 ID 插件。<br/>
-                    包括：StashDB、ThePornDB、FansDB、JAVStash、PMV Stash
-                </p>
+                <p>支持多个 Stash-Box 实例的外部 ID 跳转。</p>
 
                 <form id="StashBoxConfigForm">
                     <div class="checkboxContainer">
                         <label class="checkboxLabel">
-                            <input type="checkbox" is="emby-checkbox" id="EnableStashDB" name="EnableStashDB" />
-                            <span>启用 StashDB 支持</span>
+                            <input type="checkbox" id="EnableStashDB" />
+                            <span>启用 StashDB</span>
                         </label>
                     </div>
-
                     <div class="checkboxContainer">
                         <label class="checkboxLabel">
-                            <input type="checkbox" is="emby-checkbox" id="EnableThePornDB" name="EnableThePornDB" />
-                            <span>启用 ThePornDB 支持</span>
-                            <div class="fieldDescription">
-                                如果已安装其他 ThePornDB 插件，请保持此项禁用，避免冲突
-                            </div>
+                            <input type="checkbox" id="EnableThePornDB" />
+                            <span>启用 ThePornDB</span>
+                            <div class="fieldDescription">如果已安装其他 ThePornDB 插件，请保持禁用</div>
                         </label>
                     </div>
-
                     <div class="checkboxContainer">
                         <label class="checkboxLabel">
-                            <input type="checkbox" is="emby-checkbox" id="EnableFansDB" name="EnableFansDB" />
-                            <span>启用 FansDB 支持</span>
+                            <input type="checkbox" id="EnableFansDB" />
+                            <span>启用 FansDB</span>
                         </label>
                     </div>
-
                     <div class="checkboxContainer">
                         <label class="checkboxLabel">
-                            <input type="checkbox" is="emby-checkbox" id="EnableJAVStash" name="EnableJAVStash" />
-                            <span>启用 JAVStash 支持</span>
+                            <input type="checkbox" id="EnableJAVStash" />
+                            <span>启用 JAVStash</span>
                         </label>
                     </div>
-
                     <div class="checkboxContainer">
                         <label class="checkboxLabel">
-                            <input type="checkbox" is="emby-checkbox" id="EnablePMVStash" name="EnablePMVStash" />
-                            <span>启用 PMV Stash 支持</span>
+                            <input type="checkbox" id="EnablePMVStash" />
+                            <span>启用 PMVStash</span>
                         </label>
                     </div>
-
                     <button is="emby-button" type="submit" class="raised button-submit block emby-button">
                         <span>保存</span>
                     </button>
@@ -62,7 +52,6 @@
             (function() {
                 var pluginId = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
                 var config;
-
                 $('#StashBoxConfigurationPage').on('pageshow', function() {
                     Dashboard.showLoadingMsg();
                     ApiClient.getPluginConfiguration(pluginId).then(function(c) {
@@ -75,7 +64,6 @@
                         Dashboard.hideLoadingMsg();
                     });
                 });
-
                 $('#StashBoxConfigForm').on('submit', function(e) {
                     Dashboard.showLoadingMsg();
                     config.EnableStashDB = $('#EnableStashDB').prop('checked');

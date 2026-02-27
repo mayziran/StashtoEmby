@@ -4,12 +4,13 @@ Emby 插件，支持多个 Stash-Box 实例的外部 ID 跳转。
 
 ## 功能
 
-- 支持 5 个官方 Stash-Box 实例的外部链接跳转：
+- 支持 5 个 Stash-Box 实例的外部链接跳转：
   - **StashDB** - https://stashdb.org
   - **ThePornDB** - https://theporndb.net
   - **FansDB** - https://fansdb.cc
   - **JAVStash** - https://javstash.org
-  - **PMV Stash** - https://pmvstash.org
+  - **PMVStash** - https://pmvstash.org
+- 每个实例可独立启用/禁用，避免与其他插件冲突
 
 ## 安装
 
@@ -35,7 +36,7 @@ Emby 插件，支持多个 Stash-Box 实例的外部 ID 跳转。
 - ❌ ThePornDB - **禁用**（避免与其他 ThePornDB 插件冲突）
 - ✅ FansDB - 启用
 - ✅ JAVStash - 启用
-- ✅ PMV Stash - 启用
+- ✅ PMVStash - 启用
 
 ## 使用
 
@@ -60,7 +61,7 @@ Emby 插件，支持多个 Stash-Box 实例的外部 ID 跳转。
 
 ### ThePornDB 冲突
 
-- 如果已安装其他 ThePornDB 插件（如 [Jellyfin.Plugin.ThePornDB](https://github.com/ThePornDatabase/Jellyfin.Plugin.ThePornDB)），可在本插件配置中禁用 ThePornDB 支持
+- 如果已安装其他 ThePornDB 插件，可在本插件配置中禁用 ThePornDB 支持
 - 或者在 NFO 中不使用 `type="theporndb"`
 
 ### NFO type

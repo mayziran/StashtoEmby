@@ -1,14 +1,10 @@
 using System;
-using System.Collections.Generic;
 using MediaBrowser.Common.Plugins;
-using MediaBrowser.Model.Plugins;
-using Newtonsoft.Json;
 using Emby.Plugin.StashBox.Configuration;
 
 #if __EMBY__
 using MediaBrowser.Common;
 using MediaBrowser.Model.Logging;
-using Emby.Web.GenericEdit;
 #else
 using MediaBrowser.Common.Configuration;
 using MediaBrowser.Model.Serialization;
@@ -46,15 +42,5 @@ namespace Emby.Plugin.StashBox
         public override string Name => "StashBox";
 
         public override Guid Id => Guid.Parse("a1b2c3d4-e5f6-7890-abcd-ef1234567890");
-
-        public IEnumerable<PluginPageInfo> GetPages()
-            => new[]
-            {
-                new PluginPageInfo
-                {
-                    Name = this.Name,
-                    EmbeddedResourcePath = $"{this.GetType().Namespace}.Configuration.configPage.html",
-                },
-            };
     }
 }
