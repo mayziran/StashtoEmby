@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.Movies;
 using MediaBrowser.Controller.Providers;
 using MediaBrowser.Model.Entities;
@@ -8,8 +9,7 @@ using MediaBrowser.Model.Entities;
 namespace Emby.Plugin.StashBox.ExternalIds
 {
     /// <summary>
-    /// StashBox 外部 ID 提供者
-    /// 支持多个 Stash-Box 实例：StashDB、ThePornDB、FansDB、JAVStash、PMV Stash 以及自定义实例
+    /// StashBox 外部 ID 提供者（电影）
     /// </summary>
     public class StashBoxExternalId : IExternalId, IHasWebsite
     {
@@ -24,14 +24,20 @@ namespace Emby.Plugin.StashBox.ExternalIds
         public string Key => "stashdb";
 
         /// <summary>
-        /// URL 格式字符串
+        /// URL 格式字符串（只有 {0} 一个占位符，代表 stash_id）
         /// </summary>
-        public string UrlFormatString => "{0}/scenes/{1}";
+        public string UrlFormatString => GetUrlFormatString();
 
         /// <summary>
         /// 网站地址
         /// </summary>
         public string Website => Plugin.Instance?.Configuration?.DefaultEndpoint?.Replace("/graphql", "") ?? "https://stashdb.org";
+
+        private string GetUrlFormatString()
+        {
+            var baseUrl = Plugin.Instance?.Configuration?.DefaultEndpoint?.Replace("/graphql", "") ?? "https://stashdb.org";
+            return baseUrl + "/scenes/{0}";
+        }
 
         /// <summary>
         /// 检查是否支持该媒体类型
@@ -39,13 +45,7 @@ namespace Emby.Plugin.StashBox.ExternalIds
         public bool Supports(IHasProviderIds item)
         {
             // 只支持电影
-            if (!(item is Movie))
-            {
-                return false;
-            }
-
-            // 检查是否有 stashdb 类型的 ID
-            return item.ProviderIds.ContainsKey(Key);
+            return item is Movie;
         }
 
         /// <summary>
@@ -68,7 +68,7 @@ namespace Emby.Plugin.StashBox.ExternalIds
                     var baseUrl = GetBaseUrlFromEndpoint(endpoint);
                     if (!string.IsNullOrEmpty(baseUrl) && !string.IsNullOrEmpty(stashId))
                     {
-                        return string.Format(UrlFormatString, baseUrl, stashId);
+                        return string.Format(baseUrl + "/scenes/{0}", stashId);
                     }
                 }
                 else if (parts.Length == 1)
@@ -78,7 +78,7 @@ namespace Emby.Plugin.StashBox.ExternalIds
                     if (!string.IsNullOrEmpty(stashId))
                     {
                         var baseUrl = GetBaseUrlFromEndpoint(null);
-                        return string.Format(UrlFormatString, baseUrl, stashId);
+                        return string.Format(baseUrl + "/scenes/{0}", stashId);
                     }
                 }
             }
