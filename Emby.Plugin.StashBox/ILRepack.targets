@@ -6,7 +6,6 @@
     </ItemGroup>
 
     <ItemGroup Condition="'$(Configuration)'=='Release.Emby'">
-      <InputAssemblies Include="$(OutputPath)Newtonsoft.Json.dll" />
       <InputAssemblies Include="$(OutputPath)StandardSocketsHttpHandler.dll" />
     </ItemGroup>
 
