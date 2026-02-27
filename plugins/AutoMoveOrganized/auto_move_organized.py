@@ -349,7 +349,8 @@ def build_template_vars(
     rating = "" if rating100 is None else str(rating100)
 
     # 可能的外部 ID（例如 stashdb）
-    # 格式：完整的场景 URL（供 Emby StashBox 插件使用）
+    # 格式：endpoint 标识;stash_id（供 Emby StashBox 插件使用）
+    # 例如：stashdb;019bb7c5-... 或 theporndb;7322d484-...
     external_id = ""
     stash_ids = scene.get("stash_ids") or []
     if stash_ids and isinstance(stash_ids, list):
@@ -358,9 +359,16 @@ def build_template_vars(
             endpoint = s0.get("endpoint", "")
             stash_id = s0.get("stash_id", "")
             if endpoint and stash_id:
-                # 生成完整的场景 URL
+                # 从 endpoint 提取简短标识符
+                # https://stashdb.org/graphql -> stashdb
+                # https://theporndb.net/graphql -> theporndb
+                # https://fansdb.cc/graphql -> fansdb
                 base_url = endpoint.replace("/graphql", "")
-                external_id = f"{base_url}/scenes/{stash_id}"
+                # 提取域名主体部分
+                domain = base_url.replace("https://", "").replace("http://", "")
+                # 移除 .org/.net/.cc 等后缀
+                identifier = domain.split('.')[0]
+                external_id = f"{identifier};{stash_id}"
 
     width = None
     height = None
