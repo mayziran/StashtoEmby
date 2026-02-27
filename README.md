@@ -91,6 +91,17 @@
 
 ---
 
+### 💡 提示：如果你想跳转到本地 Stash
+
+如果你想在 Emby 中跳转到**本地 Stash 服务器**，请使用：
+
+**Jellyfin.Plugin.Stash**
+- GitHub: https://github.com/DirtyRacer1337/Jellyfin.Plugin.Stash
+- 功能：跳转到本地 Stash 服务器（如 `http://localhost:9999/scenes/{id}`）
+- 适合：使用本地 Stash 管理影片，想快速访问的用户
+
+---
+
 ## 支持
 
 - **问题反馈**: [GitHub Issues](https://github.com/mayziran/StashtoEmby/issues)
