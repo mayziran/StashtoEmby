@@ -36,27 +36,6 @@ jobs:
       with:
         tag_name: ${{ github.ref_name }}
         files: Emby.Plugin.StashBox/bin/Release/netstandard2.1/Emby.Plugin.StashBox.dll
-        body: |
-          ## Emby.Plugin.StashBox Release
-
-          ### Installation
-          1. Download `Emby.Plugin.StashBox.dll`
-          2. Copy to Emby plugins folder:
-             ```
-             C:\ProgramData\Emby-Server\programdata\plugins\
-             ```
-          3. Restart Emby Server
-
-          ### Features
-          - Support 5 Stash-Box instances:
-            - StashDB (https://stashdb.org)
-            - ThePornDB (https://theporndb.net)
-            - FansDB (https://fansdb.cc)
-            - JAVStash (https://javstash.org)
-            - PMV Stash (https://pmvstash.org)
-          - Auto-detect endpoint from NFO
-          - Click external link to jump to Stash-Box website
-
         draft: false
         prerelease: false
       env:
