@@ -56,7 +56,7 @@ namespace Emby.Plugin.StashBox.ExternalIds
         /// <returns>外部链接 URL</returns>
         public string GetExternalUrl(IHasProviderIds item)
         {
-            if (item.TryGetProviderId(Key, out var id))
+            if (item.ProviderIds.TryGetValue(Key, out var id))
             {
                 // 解析 ID 格式：endpoint|stash_id
                 var parts = id.Split('|');

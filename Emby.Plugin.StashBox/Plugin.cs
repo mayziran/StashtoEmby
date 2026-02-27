@@ -12,13 +12,23 @@ using Emby.Plugin.StashBox.Configuration;
 
 namespace Emby.Plugin.StashBox
 {
-    public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
+    public class Plugin : BasePluginSimpleUI<PluginConfiguration>
     {
-        public Plugin(IApplicationHost applicationHost)
+        public Plugin(IApplicationHost applicationHost, IHttpClient http, ILogManager logger)
             : base(applicationHost)
         {
             Instance = this;
+            Http = http;
+
+            if (logger != null)
+            {
+                Log = logger.GetLogger(this.Name);
+            }
         }
+
+        public static IHttpClient Http { get; set; }
+
+        public static ILogger Log { get; set; }
 
         public static Plugin Instance { get; private set; }
 
