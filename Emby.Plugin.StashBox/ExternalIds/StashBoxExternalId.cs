@@ -89,7 +89,7 @@ namespace Emby.Plugin.StashBox.ExternalIds
                 }
                 else
                 {
-                    Plugin.Log?.Warning($"Invalid ID format: {id}");
+                    Plugin.Log?.Warn($"Invalid ID format: {id}");
                 }
             }
             else
