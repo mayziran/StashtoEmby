@@ -349,7 +349,7 @@ def build_template_vars(
     rating = "" if rating100 is None else str(rating100)
 
     # 可能的外部 ID（供 Emby StashBox 插件使用）
-    # 格式：{uuid}（只存 UUID，type 标识来源）
+    # 格式：scenes/{uuid}（与 ThePornDB 插件保持一致）
     external_id = ""
     nfo_type = ""
     stash_ids = scene.get("stash_ids") or []
@@ -368,10 +368,10 @@ def build_template_vars(
                 domain = base_url.replace("https://", "").replace("http://", "")
                 # 移除 .org/.net/.cc 等后缀
                 identifier = domain.split('.')[0]
-                
-                # 只存 UUID
-                external_id = stash_id
-                
+
+                # 存 scenes/{uuid} 格式（与 ThePornDB 插件一致）
+                external_id = f"scenes/{stash_id}"
+
                 # 直接用 identifier 作为 type（小写）
                 nfo_type = identifier
 

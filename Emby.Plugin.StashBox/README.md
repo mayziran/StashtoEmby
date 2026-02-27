@@ -10,7 +10,6 @@ Emby 插件，支持多个 Stash-Box 实例的外部 ID 跳转。
   - **FansDB** - https://fansdb.cc
   - **JAVStash** - https://javstash.org
   - **PMV Stash** - https://pmvstash.org
-- 每个实例可独立启用/禁用，避免与其他插件冲突
 
 ## 安装
 
@@ -33,7 +32,7 @@ Emby 插件，支持多个 Stash-Box 实例的外部 ID 跳转。
 ### 默认配置
 
 - ✅ StashDB - 启用
-- ❌ ThePornDB - **禁用**（避免与官方 ThePornDB 插件冲突）
+- ❌ ThePornDB - **禁用**（避免与其他 ThePornDB 插件冲突）
 - ✅ FansDB - 启用
 - ✅ JAVStash - 启用
 - ✅ PMV Stash - 启用
@@ -46,13 +45,13 @@ Emby 插件，支持多个 Stash-Box 实例的外部 ID 跳转。
 
 ```xml
 <!-- StashDB 视频 -->
-<uniqueid type="stashdb" default="true">019bb7c5-xxxx-xxxx</uniqueid>
+<uniqueid type="stashdb" default="true">scenes/019bb7c5-xxxx-xxxx</uniqueid>
 
 <!-- ThePornDB 视频 -->
-<uniqueid type="theporndb">7322d484-xxxx-xxxx</uniqueid>
+<uniqueid type="theporndb">scenes/7322d484-xxxx-xxxx</uniqueid>
 
 <!-- FansDB 视频 -->
-<uniqueid type="fansdb">xxxx-xxxx-xxxx</uniqueid>
+<uniqueid type="fansdb">scenes/xxxx-xxxx-xxxx</uniqueid>
 ```
 
 安装后，Emby 详情页会显示外部链接按钮，点击即可跳转到对应 Stash-Box 实例。
@@ -61,12 +60,12 @@ Emby 插件，支持多个 Stash-Box 实例的外部 ID 跳转。
 
 ### ThePornDB 冲突
 
-- 如果已安装官方 [ThePornDB 插件](https://github.com/DirtyRacer1337/Jellyfin.Plugin.ThePornDB)，请保持本插件的 ThePornDB 支持为**禁用**状态
-- 如果未安装官方插件，可在配置中启用本插件的 ThePornDB 支持
+- 如果已安装其他 ThePornDB 插件（如 [Jellyfin.Plugin.ThePornDB](https://github.com/ThePornDatabase/Jellyfin.Plugin.ThePornDB)），可在本插件配置中禁用 ThePornDB 支持
+- 或者在 NFO 中不使用 `type="theporndb"`
 
 ### NFO type
 
-- NFO 的 `type` 必须与插件支持的名称一致（小写，不区分大小写）
+- NFO 的 `type` 必须与插件支持的名称一致（小写）
 - 例如：`type="stashdb"`、`type="theporndb"` 等
 
 ## 支持的 Emby 版本

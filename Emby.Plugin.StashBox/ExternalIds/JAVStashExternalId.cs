@@ -1,4 +1,3 @@
-using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.Movies;
 using MediaBrowser.Controller.Providers;
 
@@ -13,7 +12,7 @@ namespace Emby.Plugin.StashBox.ExternalIds
 
         public string Key => "javstash";
 
-        public string UrlFormatString => "https://javstash.org/scenes/{0}";
+        public string UrlFormatString => "https://javstash.org/{0}";
 
         public bool Supports(IHasProviderIds item)
         {
