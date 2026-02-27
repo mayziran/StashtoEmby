@@ -53,8 +53,9 @@
 **功能：**
 - 支持 5 个 Stash-Box 实例（StashDB、ThePornDB、FansDB、JAVStash、PMV Stash）
 - 每个实例可独立启用/禁用
+- 支持源链接按钮：跳转到原始影片来源页面
 - 在 Emby 影片详情页显示外部链接按钮
-- 点击链接跳转到对应的 Stash-Box 网站
+- 点击链接跳转到对应的 Stash-Box 网站或源页面
 
 **安装方法：**
 
