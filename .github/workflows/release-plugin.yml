@@ -10,6 +10,7 @@ permissions:
 
 env:
   PROJECT_PATH: 'Emby.Plugin.StashBox/Emby.Plugin.StashBox.csproj'
+  OUTPUT_PATH: 'Emby.Plugin.StashBox/bin/Release.Emby/netstandard2.1/Emby.Plugin.StashBox.dll'
 
 jobs:
   build-and-release:
@@ -34,10 +35,9 @@ jobs:
       run: MSBuild -t:Restore,Build -p:RestorePackagesConfig=true -property:Configuration=Release.Emby ${{ env.PROJECT_PATH }}
 
     - name: Upload DLL to Release
-      uses: softprops/action-gh-release@v1
+      uses: softprops/action-gh-release@v2
       with:
-        tag_name: ${{ github.ref_name }}
-        files: Emby.Plugin.StashBox/bin/Release.Emby/netstandard2.1/Emby.Plugin.StashBox.dll
+        files: ${{ env.OUTPUT_PATH }}
         draft: false
         prerelease: false
       env:
