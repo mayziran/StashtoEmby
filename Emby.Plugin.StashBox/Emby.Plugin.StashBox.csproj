@@ -16,17 +16,6 @@
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
   </ItemGroup>
 
-  <!-- Download Emby.Web.GenericEdit.dll for EditableOptionsBase -->
-  <Target Name="DownloadEmbyAssemblies" BeforeTargets="BeforeBuild">
-    <Exec Command="powershell -ExecutionPolicy Bypass -Command &quot;if (!(Test-Path '$(ProjectDir)lib\Emby.Web.GenericEdit.dll')) { New-Item -ItemType Directory -Force -Path '$(ProjectDir)lib'; Invoke-WebRequest -Uri 'https://github.com/MediaBrowser/Emby.Releases/raw/master/Emby.Server/Emby.Web.GenericEdit.dll' -OutFile '$(ProjectDir)lib\Emby.Web.GenericEdit.dll' }&quot;" />
-  </Target>
-
-  <ItemGroup>
-    <Reference Include="Emby.Web.GenericEdit">
-      <HintPath>$(ProjectDir)lib\Emby.Web.GenericEdit.dll</HintPath>
-    </Reference>
-  </ItemGroup>
-
   <ItemGroup>
     <None Remove="Configuration\configPage.html" />
     <EmbeddedResource Include="Configuration\configPage.html" />

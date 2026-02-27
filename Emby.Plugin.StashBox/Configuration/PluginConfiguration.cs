@@ -1,8 +1,8 @@
-using Emby.Web.GenericEdit;
+using MediaBrowser.Model.Plugins;
 
 namespace Emby.Plugin.StashBox.Configuration
 {
-    public class PluginConfiguration : EditableOptionsBase
+    public class PluginConfiguration : BasePluginConfiguration
     {
         public PluginConfiguration()
         {
@@ -12,8 +12,6 @@ namespace Emby.Plugin.StashBox.Configuration
             // 预置 5 个已知 Stash-Box 实例
             this.KnownEndpoints = "https://stashdb.org/graphql,https://theporndb.net/graphql,https://fansdb.cc/graphql,https://javstash.org/graphql,https://pmvstash.org/graphql";
         }
-
-        public override string EditorTitle => Plugin.Instance?.Name ?? "StashBox";
 
         /// <summary>
         /// 默认的 Stash-Box endpoint
