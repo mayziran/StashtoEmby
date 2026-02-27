@@ -1,3 +1,4 @@
+using System;
 using Emby.Web.GenericEdit;
 
 namespace Emby.Plugin.StashBox.Configuration
