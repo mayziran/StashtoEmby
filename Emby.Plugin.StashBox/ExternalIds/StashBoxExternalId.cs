@@ -24,20 +24,15 @@ namespace Emby.Plugin.StashBox.ExternalIds
         public string Key => "stashdb";
 
         /// <summary>
-        /// URL 格式字符串（只有 {0} 一个占位符，代表 stash_id）
+        /// URL 格式字符串
+        /// Emby 优先使用 GetExternalUrl()，如果返回 null 才使用此格式
         /// </summary>
-        public string UrlFormatString => GetUrlFormatString();
+        public string UrlFormatString => "https://stashdb.org/scenes/{0}";
 
         /// <summary>
         /// 网站地址
         /// </summary>
         public string Website => Plugin.Instance?.Configuration?.DefaultEndpoint?.Replace("/graphql", "") ?? "https://stashdb.org";
-
-        private string GetUrlFormatString()
-        {
-            var baseUrl = Plugin.Instance?.Configuration?.DefaultEndpoint?.Replace("/graphql", "") ?? "https://stashdb.org";
-            return baseUrl + "/scenes/{0}";
-        }
 
         /// <summary>
         /// 检查是否支持该媒体类型
