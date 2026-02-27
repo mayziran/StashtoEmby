@@ -4,14 +4,27 @@
     <TargetFramework>netstandard2.1</TargetFramework>
     <AssemblyName>Emby.Plugin.StashBox</AssemblyName>
     <RootNamespace>Emby.Plugin.StashBox</RootNamespace>
-    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
     <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+    <AssemblyVersion>1.0.3.0</AssemblyVersion>
+    <FileVersion>1.0.3.0</FileVersion>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="MediaBrowser.Server.Core" Version="4.9.1.90" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+  </ItemGroup>
+
+  <!-- Download Emby.Web.GenericEdit.dll for EditableOptionsBase -->
+  <Target Name="DownloadEmbyAssemblies" BeforeTargets="BeforeBuild">
+    <Exec Command="powershell -ExecutionPolicy Bypass -Command &quot;if (!(Test-Path '$(ProjectDir)lib\Emby.Web.GenericEdit.dll')) { New-Item -ItemType Directory -Force -Path '$(ProjectDir)lib'; Invoke-WebRequest -Uri 'https://github.com/MediaBrowser/Emby.Releases/raw/master/Emby.Server/Emby.Web.GenericEdit.dll' -OutFile '$(ProjectDir)lib\Emby.Web.GenericEdit.dll' }&quot;" />
+  </Target>
+
+  <ItemGroup>
+    <Reference Include="Emby.Web.GenericEdit">
+      <HintPath>$(ProjectDir)lib\Emby.Web.GenericEdit.dll</HintPath>
+    </Reference>
   </ItemGroup>
 
   <ItemGroup>

@@ -67,17 +67,20 @@ namespace Emby.Plugin.StashBox.ExternalIds
 
                     // 从 endpoint 提取网站基础 URL
                     var baseUrl = GetBaseUrlFromEndpoint(endpoint);
-                    if (!string.IsNullOrEmpty(baseUrl))
+                    if (!string.IsNullOrEmpty(baseUrl) && !string.IsNullOrEmpty(stashId))
                     {
-                        return string.Format(UrlFormatString, baseUrl, stashId);
+                        return $"{baseUrl}/scenes/{stashId}";
                     }
                 }
                 else if (parts.Length == 1)
                 {
                     // 只有 stash_id，没有 endpoint（兼容旧格式）
                     var stashId = parts[0];
-                    var baseUrl = Plugin.Instance.Configuration.DefaultEndpoint?.Replace("/graphql", "") ?? "https://stashdb.org";
-                    return string.Format(UrlFormatString, baseUrl, stashId);
+                    if (!string.IsNullOrEmpty(stashId))
+                    {
+                        var baseUrl = Plugin.Instance.Configuration.DefaultEndpoint?.Replace("/graphql", "") ?? "https://stashdb.org";
+                        return $"{baseUrl}/scenes/{stashId}";
+                    }
                 }
             }
             return null;
