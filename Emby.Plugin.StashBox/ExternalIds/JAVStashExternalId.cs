@@ -1,0 +1,24 @@
+using MediaBrowser.Controller.Entities.Movies;
+using MediaBrowser.Controller.Providers;
+
+namespace Emby.Plugin.StashBox.ExternalIds
+{
+    /// <summary>
+    /// JAVStash 外部 ID 支持
+    /// </summary>
+    public class JAVStashExternalId : IExternalId
+    {
+        public string Name => "JAVStash";
+
+        public string Key => "javstash";
+
+        public string UrlFormatString => "https://javstash.org/scenes/{0}";
+
+        public bool Supports(IHasProviderIds item)
+        {
+            if (!Plugin.Instance?.Configuration?.EnableJAVStash ?? false)
+                return false;
+            return item is Movie;
+        }
+    }
+}

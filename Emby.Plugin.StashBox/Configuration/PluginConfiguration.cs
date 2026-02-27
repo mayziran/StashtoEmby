@@ -1,59 +1,44 @@
-using System;
 using Emby.Web.GenericEdit;
 
 namespace Emby.Plugin.StashBox.Configuration
 {
     public class PluginConfiguration : EditableOptionsBase
     {
-        // 预设的 Stash-Box 实例列表（硬编码，始终支持）
-        private static readonly string[] PresetEndpoints = new[]
-        {
-            "https://stashdb.org/graphql",
-            "https://theporndb.net/graphql",
-            "https://fansdb.cc/graphql",
-            "https://javstash.org/graphql",
-            "https://pmvstash.org/graphql"
-        };
-
         public PluginConfiguration()
         {
-            // 默认使用 StashDB
-            this.DefaultEndpoint = "https://stashdb.org/graphql";
-
-            // 用户自定义的额外端点（逗号分隔）
-            this.CustomEndpoints = string.Empty;
+            // 默认启用所有实例
+            this.EnableStashDB = true;
+            this.EnableThePornDB = false;  // 默认禁用，避免与官方插件冲突
+            this.EnableFansDB = true;
+            this.EnableJAVStash = true;
+            this.EnablePMVStash = true;
         }
 
         public override string EditorTitle => Plugin.Instance?.Name ?? "StashBox";
 
         /// <summary>
-        /// 默认的 Stash-Box endpoint
+        /// 是否启用 StashDB 支持
         /// </summary>
-        public string DefaultEndpoint { get; set; }
+        public bool EnableStashDB { get; set; }
 
         /// <summary>
-        /// 用户自定义的额外 Stash-Box endpoint 列表（逗号分隔）
-        /// 预设的 5 个端点始终支持，此处仅用于添加新的端点
+        /// 是否启用 ThePornDB 支持（如果已安装官方 ThePornDB 插件，请保持禁用）
         /// </summary>
-        public string CustomEndpoints { get; set; }
+        public bool EnableThePornDB { get; set; }
 
         /// <summary>
-        /// 获取所有支持的端点列表（预设 + 自定义）
+        /// 是否启用 FansDB 支持
         /// </summary>
-        public string[] GetAllEndpoints()
-        {
-            if (string.IsNullOrEmpty(this.CustomEndpoints))
-            {
-                return PresetEndpoints;
-            }
+        public bool EnableFansDB { get; set; }
 
-            var custom = this.CustomEndpoints.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries);
-            var all = new string[PresetEndpoints.Length + custom.Length];
+        /// <summary>
+        /// 是否启用 JAVStash 支持
+        /// </summary>
+        public bool EnableJAVStash { get; set; }
 
-            PresetEndpoints.CopyTo(all, 0);
-            custom.CopyTo(all, PresetEndpoints.Length);
-
-            return all;
-        }
+        /// <summary>
+        /// 是否启用 PMVStash 支持
+        /// </summary>
+        public bool EnablePMVStash { get; set; }
     }
 }

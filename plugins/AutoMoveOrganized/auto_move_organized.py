@@ -348,10 +348,10 @@ def build_template_vars(
     rating100 = scene.get("rating100")
     rating = "" if rating100 is None else str(rating100)
 
-    # 可能的外部 ID（例如 stashdb）
-    # 格式：endpoint 标识;stash_id（供 Emby StashBox 插件使用）
-    # 例如：stashdb;019bb7c5-... 或 theporndb;7322d484-...
+    # 可能的外部 ID（供 Emby StashBox 插件使用）
+    # 格式：{uuid}（只存 UUID，type 标识来源）
     external_id = ""
+    nfo_type = ""
     stash_ids = scene.get("stash_ids") or []
     if stash_ids and isinstance(stash_ids, list):
         s0 = stash_ids[0]
@@ -359,7 +359,7 @@ def build_template_vars(
             endpoint = s0.get("endpoint", "")
             stash_id = s0.get("stash_id", "")
             if endpoint and stash_id:
-                # 从 endpoint 提取简短标识符
+                # 从 endpoint 提取简短标识符（小写，直接用作 type）
                 # https://stashdb.org/graphql -> stashdb
                 # https://theporndb.net/graphql -> theporndb
                 # https://fansdb.cc/graphql -> fansdb
@@ -368,7 +368,12 @@ def build_template_vars(
                 domain = base_url.replace("https://", "").replace("http://", "")
                 # 移除 .org/.net/.cc 等后缀
                 identifier = domain.split('.')[0]
-                external_id = f"{identifier};{stash_id}"
+                
+                # 只存 UUID
+                external_id = stash_id
+                
+                # 直接用 identifier 作为 type（小写）
+                nfo_type = identifier
 
     width = None
     height = None
@@ -427,6 +432,7 @@ def build_template_vars(
         "original_name": original_name,
         "ext": ext,
         "external_id": external_id,
+        "nfo_type": nfo_type,
         "width": width,
         "height": height,
         "resolution": resolution,
@@ -1482,6 +1488,7 @@ def write_nfo_for_scene(video_path: str, scene: Dict[str, Any], settings: Dict[s
     code = vars_map.get("code") or ""
     rating = vars_map.get("rating")
     external_id = vars_map.get("external_id") or ""
+    nfo_type = vars_map.get("nfo_type") or ""
     urls = scene.get("urls") or []
     url0 = urls[0] if urls else ""
 
@@ -1642,9 +1649,9 @@ def write_nfo_for_scene(video_path: str, scene: Dict[str, Any], settings: Dict[s
         _set_text("set", collection_name)
         _set_text("collection", collection_name)
 
-    # uniqueid：stashdb 及本地 scene id
-    if external_id:
-        uid_el = ET.SubElement(root, "uniqueid", {"type": "stashdb", "default": "true"})
+    # uniqueid：根据 Stash-Box 实例类型写入对应的 type
+    if external_id and nfo_type:
+        uid_el = ET.SubElement(root, "uniqueid", {"type": nfo_type, "default": "true"})
         uid_el.text = external_id
     if vars_map.get("id"):
         uid_local = ET.SubElement(root, "uniqueid", {"type": "stash", "default": "false"})

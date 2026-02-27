@@ -4,35 +4,54 @@
     <title>StashBox</title>
 </head>
 <body>
-    <div id="StashBoxConfigurationPage" data-role="page" class="page type-interior pluginConfigurationPage" data-require="emby-button">
+    <div id="StashBoxConfigurationPage" data-role="page" class="page type-interior pluginConfigurationPage">
         <div data-role="content">
             <div class="content-primary">
                 <h1>StashBox</h1>
                 <p class="description">
                     支持多个 Stash-Box 实例的外部 ID 插件。<br/>
-                    包括：StashDB、ThePornDB、FansDB、JAVStash、PMV Stash 以及自定义实例
+                    包括：StashDB、ThePornDB、FansDB、JAVStash、PMV Stash
                 </p>
-                
+
                 <form id="StashBoxConfigForm">
-                    <div class="inputContainer">
-                        <label class="inputLabel inputLabelUnfocused" for="DefaultEndpoint">默认 Endpoint</label>
-                        <input id="DefaultEndpoint" name="DefaultEndpoint" type="text" is="emby-input" />
-                        <div class="fieldDescription">
-                            默认的 Stash-Box GraphQL 端点<br/>
-                            例如：https://stashdb.org/graphql
-                        </div>
+                    <div class="checkboxContainer">
+                        <label class="checkboxLabel">
+                            <input type="checkbox" is="emby-checkbox" id="EnableStashDB" name="EnableStashDB" />
+                            <span>启用 StashDB 支持</span>
+                        </label>
                     </div>
-                    
-                    <div class="inputContainer">
-                        <label class="inputLabel inputLabelUnfocused" for="CustomEndpoints">自定义 Stash-Box 实例</label>
-                        <textarea id="CustomEndpoints" name="CustomEndpoints" rows="5" is="emby-input" style="width: 100%; font-family: monospace;"></textarea>
-                        <div class="fieldDescription">
-                            自定义的 Stash-Box 实例列表，每行一个端点地址<br/>
-                            预设已支持：StashDB、ThePornDB、FansDB、JAVStash、PMV Stash<br/>
-                            如有新的 Stash-Box 实例，可手动添加到此列表
-                        </div>
+
+                    <div class="checkboxContainer">
+                        <label class="checkboxLabel">
+                            <input type="checkbox" is="emby-checkbox" id="EnableThePornDB" name="EnableThePornDB" />
+                            <span>启用 ThePornDB 支持</span>
+                            <div class="fieldDescription">
+                                如果已安装官方 ThePornDB 插件，请保持此项禁用，避免冲突
+                            </div>
+                        </label>
                     </div>
-                    
+
+                    <div class="checkboxContainer">
+                        <label class="checkboxLabel">
+                            <input type="checkbox" is="emby-checkbox" id="EnableFansDB" name="EnableFansDB" />
+                            <span>启用 FansDB 支持</span>
+                        </label>
+                    </div>
+
+                    <div class="checkboxContainer">
+                        <label class="checkboxLabel">
+                            <input type="checkbox" is="emby-checkbox" id="EnableJAVStash" name="EnableJAVStash" />
+                            <span>启用 JAVStash 支持</span>
+                        </label>
+                    </div>
+
+                    <div class="checkboxContainer">
+                        <label class="checkboxLabel">
+                            <input type="checkbox" is="emby-checkbox" id="EnablePMVStash" name="EnablePMVStash" />
+                            <span>启用 PMV Stash 支持</span>
+                        </label>
+                    </div>
+
                     <button is="emby-button" type="submit" class="raised button-submit block emby-button">
                         <span>保存</span>
                     </button>
@@ -48,23 +67,22 @@
                     Dashboard.showLoadingMsg();
                     ApiClient.getPluginConfiguration(pluginId).then(function(c) {
                         config = c;
-                        // 支持驼峰式和下划线式属性名
-                        $('#DefaultEndpoint').val(c.DefaultEndpoint || c.defaultEndpoint);
-                        // 将逗号分隔的列表转换为换行显示
-                        var endpointsList = (c.CustomEndpoints || c.customEndpoints || '').split(',').join('\n');
-                        $('#CustomEndpoints').val(endpointsList);
+                        $('#EnableStashDB').prop('checked', c.EnableStashDB);
+                        $('#EnableThePornDB').prop('checked', c.EnableThePornDB);
+                        $('#EnableFansDB').prop('checked', c.EnableFansDB);
+                        $('#EnableJAVStash').prop('checked', c.EnableJAVStash);
+                        $('#EnablePMVStash').prop('checked', c.EnablePMVStash);
                         Dashboard.hideLoadingMsg();
                     });
                 });
 
                 $('#StashBoxConfigForm').on('submit', function(e) {
                     Dashboard.showLoadingMsg();
-                    config.DefaultEndpoint = $('#DefaultEndpoint').val();
-                    // 将换行分隔的列表转换为逗号分隔存储
-                    var endpointsList = $('#CustomEndpoints').val().split('\n').filter(function(line) {
-                        return line.trim() !== '';
-                    }).join(',');
-                    config.CustomEndpoints = endpointsList;
+                    config.EnableStashDB = $('#EnableStashDB').prop('checked');
+                    config.EnableThePornDB = $('#EnableThePornDB').prop('checked');
+                    config.EnableFansDB = $('#EnableFansDB').prop('checked');
+                    config.EnableJAVStash = $('#EnableJAVStash').prop('checked');
+                    config.EnablePMVStash = $('#EnablePMVStash').prop('checked');
                     ApiClient.updatePluginConfiguration(pluginId, config).then(function(result) {
                         Dashboard.processPluginConfigurationUpdateResult(result);
                     });
