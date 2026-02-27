@@ -9,13 +9,13 @@
         "imageUrl": "https://raw.githubusercontent.com/DirtyRacer1337/Jellyfin.Plugin.Stash/master/Jellyfin.Plugin.Stash/Images/stash.png",
         "versions": [
             {
-                "version": "1.0.0.0",
-                "changelog": "Initial release\n- Support 5 Stash-Box instances\n- Read NFO with endpoint|stash_id format\n- Auto-detect StashDB, ThePornDB, FansDB, JAVStash, PMV Stash",
+                "version": "1.0.1.0",
+                "changelog": "Fix compilation errors\n- Use BasePluginSimpleUI for Emby\n- Fix ProviderIds access method",
                 "targetAbi": "4.7.0.0",
-                "sourceUrl": "https://github.com/mayziran/StashtoEmby/releases/download/v1.0.0.0/Emby.Plugin.StashBox.dll",
+                "sourceUrl": "https://github.com/mayziran/StashtoEmby/releases/download/v1.0.1.0/Emby.Plugin.StashBox.dll",
                 "checksum": "",
                 "timestamp": "2026-02-27T00:00:00",
-                "assemblyVersion": "1.0.0.0"
+                "assemblyVersion": "1.0.1.0"
             }
         ]
     }
