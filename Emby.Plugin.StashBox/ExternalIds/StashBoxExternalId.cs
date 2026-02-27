@@ -24,12 +24,6 @@ namespace Emby.Plugin.StashBox.ExternalIds
         public string Key => "stashdb";
 
         /// <summary>
-        /// URL 格式字符串
-        /// {0} = 网站基础 URL, {1} = stash_id
-        /// </summary>
-        public string UrlFormatString => "{0}/scenes/{1}";
-
-        /// <summary>
         /// 网站地址
         /// </summary>
         public string Website => Plugin.Instance?.Configuration?.DefaultEndpoint?.Replace("/graphql", "") ?? "https://stashdb.org";

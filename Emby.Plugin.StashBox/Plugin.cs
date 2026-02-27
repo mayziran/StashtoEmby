@@ -33,6 +33,6 @@ namespace Emby.Plugin.StashBox
                 },
             };
 
-        public string ConfigurationPage => $"{this.GetType().Namespace}.Configuration.configPage.html";
+        public string ConfigurationPage => this.Name;
     }
 }

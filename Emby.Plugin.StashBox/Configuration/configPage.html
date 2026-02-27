@@ -25,7 +25,7 @@
                     
                     <div class="inputContainer">
                         <label class="inputLabel inputLabelUnfocused" for="KnownEndpoints">已知 Endpoint 列表</label>
-                        <textarea id="KnownEndpoints" name="KnownEndpoints" rows="5" is="emby-input" style="width: 100%; font-family: monospace;" /></textarea>
+                        <textarea id="KnownEndpoints" name="KnownEndpoints" rows="5" is="emby-input" style="width: 100%; font-family: monospace;"></textarea>
                         <div class="fieldDescription">
                             已知的 Stash-Box 实例列表，每行一个<br/>
                             插件会自动识别这些端点并跳转到对应的网站<br/>
@@ -53,9 +53,10 @@ https://pmvstash.org/graphql</pre>
                     Dashboard.showLoadingMsg();
                     ApiClient.getPluginConfiguration(pluginId).then(function(c) {
                         config = c;
-                        $('#DefaultEndpoint').val(config.DefaultEndpoint);
+                        // 支持驼峰式和下划线式属性名
+                        $('#DefaultEndpoint').val(c.DefaultEndpoint || c.defaultEndpoint);
                         // 将逗号分隔的列表转换为换行显示
-                        var endpointsList = config.KnownEndpoints.split(',').join('\n');
+                        var endpointsList = (c.KnownEndpoints || c.knownEndpoints || '').split(',').join('\n');
                         $('#KnownEndpoints').val(endpointsList);
                         Dashboard.hideLoadingMsg();
                     });
