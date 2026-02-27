@@ -1650,11 +1650,12 @@ def write_nfo_for_scene(video_path: str, scene: Dict[str, Any], settings: Dict[s
         _set_text("collection", collection_name)
 
     # uniqueid：根据 Stash-Box 实例类型写入对应的 type
+    # 注意：不设置 default 属性，遵循 Emby 规范（default="false" 或省略）
     if external_id and nfo_type:
-        uid_el = ET.SubElement(root, "uniqueid", {"type": nfo_type, "default": "true"})
+        uid_el = ET.SubElement(root, "uniqueid", {"type": nfo_type})
         uid_el.text = external_id
     if vars_map.get("id"):
-        uid_local = ET.SubElement(root, "uniqueid", {"type": "stash", "default": "false"})
+        uid_local = ET.SubElement(root, "uniqueid", {"type": "stash"})
         uid_local.text = str(vars_map.get("id"))
 
     # 演员列表
