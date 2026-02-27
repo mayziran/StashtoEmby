@@ -10,8 +10,9 @@ namespace Emby.Plugin.StashBox.ExternalIds
         public string Name => "源链接";
         public string Key => "scene_source_url";
 
-        // UrlFormatString 使用 {0} 占位符，Emby 会替换为存储的 ID 值（即完整 URL）
-        public string UrlFormatString => "{0}";
+        // 存储格式：www.example.com\path（反斜杠替代正斜杠）
+        // Emby 生成 https://www.example.com\path，浏览器会将反斜杠识别为正斜杠
+        public string UrlFormatString => "https://{0}";
 
         public bool Supports(IHasProviderIds item)
         {
