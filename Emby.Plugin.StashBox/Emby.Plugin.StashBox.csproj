@@ -7,11 +7,9 @@
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
-    <DefineConstants>__EMBY__</DefineConstants>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="ILRepack.Lib.MSBuild" Version="2.1.18" />
     <PackageReference Include="MediaBrowser.Server.Core" Version="4.9.1.90" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
   </ItemGroup>

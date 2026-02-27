@@ -8,7 +8,7 @@ namespace Emby.Plugin.StashBox.Configuration
         {
             // 默认使用 StashDB
             this.DefaultEndpoint = "https://stashdb.org/graphql";
-            
+
             // 预置 5 个已知 Stash-Box 实例
             this.KnownEndpoints = "https://stashdb.org/graphql,https://theporndb.net/graphql,https://fansdb.cc/graphql,https://javstash.org/graphql,https://pmvstash.org/graphql";
         }
