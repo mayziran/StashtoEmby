@@ -51,41 +51,31 @@
 为 Emby 服务器提供 Stash-Box 外部 ID 支持，让你在 Emby 中可以直接跳转到 Stash-Box 网站查看场景详情。
 
 **功能：**
-- 读取 NFO 中的 Stash-Box ID
-- 在 Emby 影片详情页显示 "StashBox" 外部链接
-- 点击链接自动跳转到对应的 Stash-Box 网站
-- 支持多个主流 Stash-Box 实例（StashDB、ThePornDB、FansDB、JAVStash、PMV Stash）
-- 支持自定义添加新的 Stash-Box 实例
-- 自动识别 endpoint 并跳转到正确的网站
+- 支持 5 个 Stash-Box 实例（StashDB、ThePornDB、FansDB、JAVStash、PMV Stash）
+- 每个实例可独立启用/禁用
+- 在 Emby 影片详情页显示外部链接按钮
+- 点击链接跳转到对应的 Stash-Box 网站
 
 **安装方法：**
 
 1. 从 [Releases](https://github.com/mayziran/StashtoEmby/releases) 下载 `Emby.Plugin.StashBox.dll`
-2. 将 DLL 文件复制到 Emby 插件目录
+2. 复制到 Emby 插件目录
 3. 重启 Emby 服务器
-4. 在 Emby 管理界面配置（可选）：
-   - 进入 **管理 → 插件 → StashBox**
-   - 可以添加自定义的 Stash-Box 实例端点
 
 **使用方法：**
 
 1. 使用 AutoMoveOrganized 插件生成包含 Stash-Box ID 的 NFO 文件
 2. 在 Emby 中刷新媒体库
-3. 打开任意影片详情页
-4. 在 "更多信息" 部分会看到 "StashBox" 链接
-5. 点击链接即可跳转到对应的 Stash-Box 网站
+3. 安装后，Emby 详情页会显示外部链接按钮，点击即可跳转到对应 Stash-Box 实例
 
 **NFO 格式示例：**
 
 ```xml
-<uniqueid type="stashdb" default="true">https://stashdb.org/graphql|7322d484-bd20-4856-816a-27646cd414f0</uniqueid>
+<uniqueid type="stashdb">scenes\019bb7c5-xxxx-xxxx</uniqueid>
+<uniqueid type="theporndb">scenes\7322d484-xxxx-xxxx</uniqueid>
 ```
 
-**格式说明：**
-- `type="stashdb"` - 固定使用这个类型
-- 值格式：`endpoint|stash_id`
-  - `endpoint` - GraphQL 端点 URL
-  - `stash_id` - Scene 的 UUID
+**注意：** 使用反斜杠 `\`（Emby 会将 `/` 视为路径分隔符）
 
 [详细文档](https://github.com/mayziran/StashtoEmby/blob/master/Emby.Plugin.StashBox/README.md)
 

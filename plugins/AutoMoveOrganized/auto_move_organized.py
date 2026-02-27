@@ -1582,7 +1582,6 @@ def write_nfo_for_scene(video_path: str, scene: Dict[str, Any], settings: Dict[s
     _set_text("originalplot", original_plot_for_nfo)
     _set_text("studio", studio)
     _set_text("director", director)
-    _set_text("id", external_id or str(vars_map.get("id") or ""))
     _set_text("code", code)
     if rating:
         _set_text("rating", rating)
