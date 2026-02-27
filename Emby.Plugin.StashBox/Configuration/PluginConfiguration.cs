@@ -1,6 +1,8 @@
+using Emby.Web.GenericEdit;
+
 namespace Emby.Plugin.StashBox.Configuration
 {
-    public class PluginConfiguration
+    public class PluginConfiguration : EditableOptionsBase
     {
         public PluginConfiguration()
         {
@@ -10,6 +12,8 @@ namespace Emby.Plugin.StashBox.Configuration
             this.EnableJAVStash = true;
             this.EnablePMVStash = true;
         }
+
+        public override string EditorTitle => Plugin.Instance?.Name ?? "StashBox";
 
         public bool EnableStashDB { get; set; }
         public bool EnableThePornDB { get; set; }

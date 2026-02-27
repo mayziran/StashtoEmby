@@ -51,28 +51,19 @@
         <script type="text/javascript">
             (function() {
                 var pluginId = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
-                var config = {
-                    EnableStashDB: true,
-                    EnableThePornDB: false,
-                    EnableFansDB: true,
-                    EnableJAVStash: true,
-                    EnablePMVStash: true
-                };
-
+                var config;
                 $('#StashBoxConfigurationPage').on('pageshow', function() {
                     Dashboard.showLoadingMsg();
-                    // 加载配置
-                    ApiClient.getJSON(ApiClient.getUrl('Plugins/' + pluginId + '/Configuration')).then(function(c) {
+                    ApiClient.getPluginConfiguration(pluginId).then(function(c) {
                         config = c;
-                        $('#EnableStashDB').prop('checked', c.EnableStashDB);
-                        $('#EnableThePornDB').prop('checked', c.EnableThePornDB);
-                        $('#EnableFansDB').prop('checked', c.EnableFansDB);
-                        $('#EnableJAVStash').prop('checked', c.EnableJAVStash);
-                        $('#EnablePMVStash').prop('checked', c.EnablePMVStash);
+                        $('#EnableStashDB').prop('checked', c.EnableStashDB === true);
+                        $('#EnableThePornDB').prop('checked', c.EnableThePornDB === true);
+                        $('#EnableFansDB').prop('checked', c.EnableFansDB === true);
+                        $('#EnableJAVStash').prop('checked', c.EnableJAVStash === true);
+                        $('#EnablePMVStash').prop('checked', c.EnablePMVStash === true);
                         Dashboard.hideLoadingMsg();
                     });
                 });
-
                 $('#StashBoxConfigForm').on('submit', function(e) {
                     Dashboard.showLoadingMsg();
                     config.EnableStashDB = $('#EnableStashDB').prop('checked');
@@ -80,7 +71,6 @@
                     config.EnableFansDB = $('#EnableFansDB').prop('checked');
                     config.EnableJAVStash = $('#EnableJAVStash').prop('checked');
                     config.EnablePMVStash = $('#EnablePMVStash').prop('checked');
-                    // 保存配置
                     ApiClient.updatePluginConfiguration(pluginId, config).then(function(result) {
                         Dashboard.processPluginConfigurationUpdateResult(result);
                     });
