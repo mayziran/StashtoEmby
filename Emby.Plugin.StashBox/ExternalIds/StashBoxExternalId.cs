@@ -25,7 +25,7 @@ namespace Emby.Plugin.StashBox.ExternalIds
 
         /// <summary>
         /// URL 格式字符串
-        /// 注意：由于 ID 格式为 endpoint|stash_id，包含分隔符 |，无法使用简单格式字符串
+        /// 注意：由于 ID 格式为 endpoint;stash_id，包含分隔符，无法使用简单格式字符串
         /// 此属性返回一个占位格式，实际 URL 由 GetExternalUrl() 方法生成
         /// </summary>
         public string UrlFormatString => "{0}";
@@ -54,9 +54,9 @@ namespace Emby.Plugin.StashBox.ExternalIds
             if (item.ProviderIds.TryGetValue(Key, out var id))
             {
                 Plugin.Log?.Debug($"GetExternalUrl called with id: {id}");
-                
-                // 解析 ID 格式：endpoint|stash_id
-                var parts = id.Split(new[] { '|' }, 2);
+
+                // 解析 ID 格式：endpoint;stash_id
+                var parts = id.Split(new[] { ';' }, 2, StringSplitOptions.None);
                 if (parts.Length == 2)
                 {
                     var endpoint = parts[0];
@@ -67,7 +67,7 @@ namespace Emby.Plugin.StashBox.ExternalIds
                     // 从 endpoint 提取网站基础 URL
                     var baseUrl = GetBaseUrlFromEndpoint(endpoint);
                     Plugin.Log?.Debug($"Base URL: {baseUrl}");
-                    
+
                     if (!string.IsNullOrEmpty(baseUrl) && !string.IsNullOrEmpty(stashId))
                     {
                         var url = baseUrl + "/scenes/" + stashId;
@@ -80,7 +80,7 @@ namespace Emby.Plugin.StashBox.ExternalIds
                     // 只有 stash_id，没有 endpoint（兼容旧格式）
                     var stashId = parts[0];
                     Plugin.Log?.Debug($"Legacy format, stashId: {stashId}");
-                    
+
                     if (!string.IsNullOrEmpty(stashId))
                     {
                         var baseUrl = GetBaseUrlFromEndpoint(null);
