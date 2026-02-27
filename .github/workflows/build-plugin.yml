@@ -36,13 +36,13 @@ jobs:
     - name: Restore dependencies
       run: dotnet restore ${{ env.PROJECT_PATH }}
 
-    - name: Build
-      run: MSBuild -t:Restore,Build -p:RestorePackagesConfig=true -property:Configuration=Release ${{ env.PROJECT_PATH }}
+    - name: Build for Emby
+      run: MSBuild -t:Restore,Build -p:RestorePackagesConfig=true -property:Configuration=Release.Emby ${{ env.PROJECT_PATH }}
 
     - name: Upload DLL artifact
       uses: actions/upload-artifact@v4
       with:
         name: Emby.Plugin.StashBox-${{ github.sha }}
-        path: Emby.Plugin.StashBox/bin/Release/netstandard2.1/Emby.Plugin.StashBox.dll
+        path: Emby.Plugin.StashBox/bin/Release.Emby/netstandard2.1/Emby.Plugin.StashBox.dll
         if-no-files-found: error
         retention-days: 30

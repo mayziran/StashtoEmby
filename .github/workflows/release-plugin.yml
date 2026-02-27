@@ -30,14 +30,14 @@ jobs:
     - name: Restore dependencies
       run: dotnet restore ${{ env.PROJECT_PATH }}
 
-    - name: Build Release
-      run: MSBuild -t:Restore,Build -p:RestorePackagesConfig=true -property:Configuration=Release ${{ env.PROJECT_PATH }}
+    - name: Build Release for Emby
+      run: MSBuild -t:Restore,Build -p:RestorePackagesConfig=true -property:Configuration=Release.Emby ${{ env.PROJECT_PATH }}
 
     - name: Upload DLL to Release
       uses: softprops/action-gh-release@v1
       with:
         tag_name: ${{ github.ref_name }}
-        files: Emby.Plugin.StashBox/bin/Release/netstandard2.1/Emby.Plugin.StashBox.dll
+        files: Emby.Plugin.StashBox/bin/Release.Emby/netstandard2.1/Emby.Plugin.StashBox.dll
         draft: false
         prerelease: false
       env:

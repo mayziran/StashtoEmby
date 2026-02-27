@@ -1,27 +1,45 @@
 using System;
-using MediaBrowser.Common;
+using System.Collections.Generic;
 using MediaBrowser.Common.Plugins;
-using MediaBrowser.Model.Logging;
+using MediaBrowser.Model.Plugins;
+using Newtonsoft.Json;
 using Emby.Plugin.StashBox.Configuration;
+
+#if __EMBY__
+using MediaBrowser.Common;
+using MediaBrowser.Model.Logging;
+using Emby.Web.GenericEdit;
+#else
+using MediaBrowser.Common.Configuration;
+using MediaBrowser.Model.Serialization;
+using Microsoft.Extensions.Logging;
+#endif
 
 [assembly: CLSCompliant(false)]
 
 namespace Emby.Plugin.StashBox
 {
-    public class Plugin : BasePlugin
+#if __EMBY__
+    public class Plugin : BasePluginSimpleUI<PluginConfiguration>
     {
-        public Plugin(IApplicationHost applicationHost, ILogManager logger)
+        public Plugin(IApplicationHost applicationHost)
             : base(applicationHost)
         {
             Instance = this;
-
-            if (logger != null)
-            {
-                Log = logger.GetLogger(this.Name);
-            }
         }
 
-        public static ILogger Log { get; private set; }
+        public PluginConfiguration Configuration => this.GetOptions();
+#else
+    public class Plugin : BasePlugin<PluginConfiguration>
+    {
+        public Plugin(IApplicationPaths applicationPaths, IXmlSerializer xmlSerializer)
+            : base(applicationPaths, xmlSerializer)
+        {
+            Instance = this;
+        }
+
+        public PluginConfiguration Configuration => this.GetOptions();
+#endif
 
         public static Plugin Instance { get; private set; }
 
@@ -29,17 +47,14 @@ namespace Emby.Plugin.StashBox
 
         public override Guid Id => Guid.Parse("a1b2c3d4-e5f6-7890-abcd-ef1234567890");
 
-        private PluginConfiguration _configuration;
-        public PluginConfiguration Configuration
-        {
-            get
+        public IEnumerable<PluginPageInfo> GetPages()
+            => new[]
             {
-                if (_configuration == null)
+                new PluginPageInfo
                 {
-                    _configuration = (PluginConfiguration)this.GetOptions();
-                }
-                return _configuration;
-            }
-        }
+                    Name = this.Name,
+                    EmbeddedResourcePath = $"{this.GetType().Namespace}.Configuration.configPage.html",
+                },
+            };
     }
 }
