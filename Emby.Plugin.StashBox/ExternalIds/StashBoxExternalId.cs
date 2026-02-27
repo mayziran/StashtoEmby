@@ -12,7 +12,7 @@ namespace Emby.Plugin.StashBox.ExternalIds
 
         public string Key => "stashdb";
 
-        public string UrlFormatString => null;
+        public string UrlFormatString => "{0}";
 
         public string Website => Plugin.Instance?.Configuration?.DefaultEndpoint?.Replace("/graphql", "") ?? "https://stashdb.org";
 
@@ -25,27 +25,15 @@ namespace Emby.Plugin.StashBox.ExternalIds
         {
             if (item.ProviderIds.TryGetValue(Key, out var id))
             {
-                var parts = id.Split(new[] { ';' }, 2, StringSplitOptions.None);
-                if (parts.Length == 2)
+                // ID 已经是完整 URL：https://xxx/scenes/xxx_id
+                if (id.StartsWith("http://") || id.StartsWith("https://"))
                 {
-                    var endpoint = parts[0];
-                    var stashId = parts[1];
+                    return id;
+                }
 
-                    var baseUrl = GetBaseUrlFromEndpoint(endpoint);
-                    if (!string.IsNullOrEmpty(baseUrl) && !string.IsNullOrEmpty(stashId))
-                    {
-                        return baseUrl + "/scenes/" + stashId;
-                    }
-                }
-                else if (parts.Length == 1)
-                {
-                    var stashId = parts[0];
-                    if (!string.IsNullOrEmpty(stashId))
-                    {
-                        var baseUrl = GetBaseUrlFromEndpoint(null);
-                        return baseUrl + "/scenes/" + stashId;
-                    }
-                }
+                // 兼容旧格式：只有 stash_id，使用默认 endpoint
+                var baseUrl = GetBaseUrlFromEndpoint(null);
+                return baseUrl + "/scenes/" + id;
             }
             return null;
         }
