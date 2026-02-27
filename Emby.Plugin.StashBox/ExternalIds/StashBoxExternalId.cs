@@ -72,6 +72,13 @@ namespace Emby.Plugin.StashBox.ExternalIds
                         return string.Format(UrlFormatString, baseUrl, stashId);
                     }
                 }
+                else if (parts.Length == 1)
+                {
+                    // 只有 stash_id，没有 endpoint（兼容旧格式）
+                    var stashId = parts[0];
+                    var baseUrl = Plugin.Instance.Configuration.DefaultEndpoint?.Replace("/graphql", "") ?? "https://stashdb.org";
+                    return string.Format(UrlFormatString, baseUrl, stashId);
+                }
             }
             return null;
         }
