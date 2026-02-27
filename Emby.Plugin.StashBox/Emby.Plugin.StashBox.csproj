@@ -9,12 +9,27 @@
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
     <AssemblyVersion>1.0.3.0</AssemblyVersion>
     <FileVersion>1.0.3.0</FileVersion>
+    <Configurations>Debug;Release;Release.Emby;Debug.Emby</Configurations>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)' == 'Debug.Emby'">
+    <DefineConstants>__EMBY__</DefineConstants>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)' == 'Release.Emby'">
     <DefineConstants>__EMBY__</DefineConstants>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="MediaBrowser.Server.Core" Version="4.9.1.90" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(Configuration)' == 'Release' or '$(Configuration)' == 'Release.Emby'">
+    <PackageReference Include="ILRepack.Lib.MSBuild.Task" Version="2.0.44.1">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
   </ItemGroup>
 
   <ItemGroup>

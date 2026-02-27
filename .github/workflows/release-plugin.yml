@@ -3,13 +3,12 @@ name: Build and Release Plugin
 on:
   push:
     tags:
-      - 'v*'  # 当推送 v1.0.0 这样的标签时触发
+      - 'v*'
 
 permissions:
-  contents: write  # 创建 Release 需要写入权限
+  contents: write
 
 env:
-  DOTNET_VERSION: '8.0.x'
   PROJECT_PATH: 'Emby.Plugin.StashBox/Emby.Plugin.StashBox.csproj'
 
 jobs:
@@ -23,13 +22,16 @@ jobs:
     - name: Setup .NET
       uses: actions/setup-dotnet@v4
       with:
-        dotnet-version: ${{ env.DOTNET_VERSION }}
+        dotnet-version: '8.0.x'
+
+    - name: Setup MSBuild
+      uses: microsoft/setup-msbuild@v2
 
     - name: Restore dependencies
       run: dotnet restore ${{ env.PROJECT_PATH }}
 
     - name: Build Release
-      run: dotnet build ${{ env.PROJECT_PATH }} --configuration Release --no-restore
+      run: MSBuild -t:Restore,Build -p:RestorePackagesConfig=true -property:Configuration=Release ${{ env.PROJECT_PATH }}
 
     - name: Upload DLL to Release
       uses: softprops/action-gh-release@v1
