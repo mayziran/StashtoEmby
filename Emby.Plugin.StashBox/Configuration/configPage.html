@@ -24,17 +24,12 @@
                     </div>
                     
                     <div class="inputContainer">
-                        <label class="inputLabel inputLabelUnfocused" for="KnownEndpoints">已知 Endpoint 列表</label>
-                        <textarea id="KnownEndpoints" name="KnownEndpoints" rows="5" is="emby-input" style="width: 100%; font-family: monospace;"></textarea>
+                        <label class="inputLabel inputLabelUnfocused" for="CustomEndpoints">自定义 Stash-Box 实例</label>
+                        <textarea id="CustomEndpoints" name="CustomEndpoints" rows="5" is="emby-input" style="width: 100%; font-family: monospace;"></textarea>
                         <div class="fieldDescription">
-                            已知的 Stash-Box 实例列表，每行一个<br/>
-                            插件会自动识别这些端点并跳转到对应的网站<br/>
-                            例如：
-                            <pre style="background: #f0f0f0; padding: 10px; margin-top: 5px;">https://stashdb.org/graphql
-https://theporndb.net/graphql
-https://fansdb.cc/graphql
-https://javstash.org/graphql
-https://pmvstash.org/graphql</pre>
+                            自定义的 Stash-Box 实例列表，每行一个端点地址<br/>
+                            预设已支持：StashDB、ThePornDB、FansDB、JAVStash、PMV Stash<br/>
+                            如有新的 Stash-Box 实例，可手动添加到此列表
                         </div>
                     </div>
                     
@@ -56,8 +51,8 @@ https://pmvstash.org/graphql</pre>
                         // 支持驼峰式和下划线式属性名
                         $('#DefaultEndpoint').val(c.DefaultEndpoint || c.defaultEndpoint);
                         // 将逗号分隔的列表转换为换行显示
-                        var endpointsList = (c.KnownEndpoints || c.knownEndpoints || '').split(',').join('\n');
-                        $('#KnownEndpoints').val(endpointsList);
+                        var endpointsList = (c.CustomEndpoints || c.customEndpoints || '').split(',').join('\n');
+                        $('#CustomEndpoints').val(endpointsList);
                         Dashboard.hideLoadingMsg();
                     });
                 });
@@ -66,10 +61,10 @@ https://pmvstash.org/graphql</pre>
                     Dashboard.showLoadingMsg();
                     config.DefaultEndpoint = $('#DefaultEndpoint').val();
                     // 将换行分隔的列表转换为逗号分隔存储
-                    var endpointsList = $('#KnownEndpoints').val().split('\n').filter(function(line) {
+                    var endpointsList = $('#CustomEndpoints').val().split('\n').filter(function(line) {
                         return line.trim() !== '';
                     }).join(',');
-                    config.KnownEndpoints = endpointsList;
+                    config.CustomEndpoints = endpointsList;
                     ApiClient.updatePluginConfiguration(pluginId, config).then(function(result) {
                         Dashboard.processPluginConfigurationUpdateResult(result);
                     });

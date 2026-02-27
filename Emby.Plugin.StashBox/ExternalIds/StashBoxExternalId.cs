@@ -104,11 +104,8 @@ namespace Emby.Plugin.StashBox.ExternalIds
             // 移除 /graphql 后缀
             var baseUrl = endpoint.Replace("/graphql", "");
 
-            // 从配置中读取已知的 endpoint 列表
-            var knownEndpoints = config?.KnownEndpoints
-                ?.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries)
-                .Select(e => e.Trim())
-                .ToList() ?? new List<string>();
+            // 从配置中读取已知的 endpoint 列表（预设 + 自定义）
+            var knownEndpoints = config?.GetAllEndpoints() ?? new string[0];
 
             // 验证是否是已知的 Stash-Box 实例
             foreach (var knownEndpoint in knownEndpoints)
