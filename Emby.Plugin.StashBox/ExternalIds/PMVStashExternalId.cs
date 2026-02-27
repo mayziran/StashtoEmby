@@ -12,6 +12,11 @@ namespace Emby.Plugin.StashBox.ExternalIds
         public string UrlFormatString => "https://pmvstash.org/{0}";
         public string Website => "https://pmvstash.org";
 
-        public bool Supports(IHasProviderIds item) => item is Movie;
+        public bool Supports(IHasProviderIds item)
+        {
+            if (!Plugin.Instance?.Configuration?.EnablePMVStash ?? false)
+                return false;
+            return item is Movie;
+        }
     }
 }

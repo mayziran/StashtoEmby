@@ -12,6 +12,11 @@ namespace Emby.Plugin.StashBox.ExternalIds
         public string UrlFormatString => "https://fansdb.cc/{0}";
         public string Website => "https://fansdb.cc";
 
-        public bool Supports(IHasProviderIds item) => item is Movie;
+        public bool Supports(IHasProviderIds item)
+        {
+            if (!Plugin.Instance?.Configuration?.EnableFansDB ?? false)
+                return false;
+            return item is Movie;
+        }
     }
 }

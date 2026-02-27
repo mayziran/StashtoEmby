@@ -12,6 +12,11 @@ namespace Emby.Plugin.StashBox.ExternalIds
         public string UrlFormatString => "https://theporndb.net/{0}";
         public string Website => "https://theporndb.net";
 
-        public bool Supports(IHasProviderIds item) => item is Movie;
+        public bool Supports(IHasProviderIds item)
+        {
+            if (!Plugin.Instance?.Configuration?.EnableThePornDB ?? false)
+                return false;
+            return item is Movie;
+        }
     }
 }

@@ -12,6 +12,11 @@ namespace Emby.Plugin.StashBox.ExternalIds
         public string UrlFormatString => "https://javstash.org/{0}";
         public string Website => "https://javstash.org";
 
-        public bool Supports(IHasProviderIds item) => item is Movie;
+        public bool Supports(IHasProviderIds item)
+        {
+            if (!Plugin.Instance?.Configuration?.EnableJAVStash ?? false)
+                return false;
+            return item is Movie;
+        }
     }
 }
