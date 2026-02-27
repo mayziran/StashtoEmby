@@ -25,9 +25,10 @@ namespace Emby.Plugin.StashBox.ExternalIds
 
         /// <summary>
         /// URL 格式字符串
-        /// 由于 ID 格式为 endpoint|stash_id，无法使用简单格式字符串，此属性仅用于兼容
+        /// 注意：由于 ID 格式为 endpoint|stash_id，包含分隔符 |，无法使用简单格式字符串
+        /// 此属性返回一个占位格式，实际 URL 由 GetExternalUrl() 方法生成
         /// </summary>
-        public string UrlFormatString => null;
+        public string UrlFormatString => "{0}";
 
         /// <summary>
         /// 网站地址
@@ -105,35 +106,19 @@ namespace Emby.Plugin.StashBox.ExternalIds
         /// <returns>网站基础 URL</returns>
         private string GetBaseUrlFromEndpoint(string endpoint)
         {
-            // 获取配置（如果为空则使用默认值）
-            var config = Plugin.Instance?.Configuration;
-            var defaultEndpoint = config?.DefaultEndpoint ?? "https://stashdb.org/graphql";
-
             if (string.IsNullOrEmpty(endpoint))
             {
+                // 没有 endpoint 时使用默认值
+                var config = Plugin.Instance?.Configuration;
+                var defaultEndpoint = config?.DefaultEndpoint ?? "https://stashdb.org/graphql";
                 return defaultEndpoint.Replace("/graphql", "");
             }
 
-            // 移除 /graphql 后缀
+            // 直接移除 /graphql 后缀，得到网站基础 URL
+            // 例如：https://theporndb.net/graphql -> https://theporndb.net
             var baseUrl = endpoint.Replace("/graphql", "");
-
-            // 从配置中读取已知的 endpoint 列表（预设 + 自定义）
-            var knownEndpoints = config?.GetAllEndpoints() ?? new string[0];
-
-            // 验证是否是已知的 Stash-Box 实例
-            foreach (var knownEndpoint in knownEndpoints)
-            {
-                var knownBaseUrl = knownEndpoint.Replace("/graphql", "");
-                if (knownBaseUrl.Equals(baseUrl, StringComparison.OrdinalIgnoreCase))
-                {
-                    // 返回对应的网站 URL
-                    Plugin.Log?.Debug($"Known endpoint matched: {knownBaseUrl}");
-                    return knownBaseUrl;
-                }
-            }
-
-            // 如果不是已知实例，返回提取的 baseUrl（支持未预置的新实例）
-            Plugin.Log?.Debug($"Unknown endpoint, returning extracted baseUrl: {baseUrl}");
+            
+            Plugin.Log?.Debug($"Extracted base URL from endpoint: {baseUrl}");
             return baseUrl;
         }
     }
