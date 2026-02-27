@@ -10,7 +10,7 @@ namespace Emby.Plugin.StashBox
 {
     public class Plugin : BasePlugin<PluginConfiguration>
     {
-        public Plugin()
+        public Plugin() : base(null, null)
         {
             Instance = this;
         }
