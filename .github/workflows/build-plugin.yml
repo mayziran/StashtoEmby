@@ -1,0 +1,46 @@
+name: Build Emby Plugin
+
+on:
+  push:
+    branches: [ main, master ]
+    paths:
+      - 'Emby.Plugin.StashBox/**'
+  pull_request:
+    branches: [ main, master ]
+    paths:
+      - 'Emby.Plugin.StashBox/**'
+
+permissions:
+  contents: read
+  actions: write
+
+env:
+  DOTNET_VERSION: '8.0.x'
+  PROJECT_PATH: 'Emby.Plugin.StashBox/Emby.Plugin.StashBox.csproj'
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ env.DOTNET_VERSION }}
+
+    - name: Restore dependencies
+      run: dotnet restore ${{ env.PROJECT_PATH }}
+
+    - name: Build
+      run: dotnet build ${{ env.PROJECT_PATH }} --configuration Release --no-restore
+
+    - name: Upload DLL artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: Emby.Plugin.StashBox-${{ github.sha }}
+        path: Emby.Plugin.StashBox/bin/Release/netstandard2.1/Emby.Plugin.StashBox.dll
+        if-no-files-found: error
+        retention-days: 30  # 保留 30 天

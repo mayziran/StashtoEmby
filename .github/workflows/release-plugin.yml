@@ -1,0 +1,63 @@
+name: Build and Release Plugin
+
+on:
+  push:
+    tags:
+      - 'v*'  # 当推送 v1.0.0 这样的标签时触发
+
+permissions:
+  contents: write  # 创建 Release 需要写入权限
+
+env:
+  DOTNET_VERSION: '8.0.x'
+  PROJECT_PATH: 'Emby.Plugin.StashBox/Emby.Plugin.StashBox.csproj'
+
+jobs:
+  build-and-release:
+    runs-on: windows-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ env.DOTNET_VERSION }}
+
+    - name: Restore dependencies
+      run: dotnet restore ${{ env.PROJECT_PATH }}
+
+    - name: Build Release
+      run: dotnet build ${{ env.PROJECT_PATH }} --configuration Release --no-restore
+
+    - name: Upload DLL to Release
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: ${{ github.ref_name }}
+        files: Emby.Plugin.StashBox/bin/Release/netstandard2.1/Emby.Plugin.StashBox.dll
+        body: |
+          ## Emby.Plugin.StashBox Release
+
+          ### Installation
+          1. Download `Emby.Plugin.StashBox.dll`
+          2. Copy to Emby plugins folder:
+             ```
+             C:\ProgramData\Emby-Server\programdata\plugins\
+             ```
+          3. Restart Emby Server
+
+          ### Features
+          - Support 5 Stash-Box instances:
+            - StashDB (https://stashdb.org)
+            - ThePornDB (https://theporndb.net)
+            - FansDB (https://fansdb.cc)
+            - JAVStash (https://javstash.org)
+            - PMV Stash (https://pmvstash.org)
+          - Auto-detect endpoint from NFO
+          - Click external link to jump to Stash-Box website
+
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

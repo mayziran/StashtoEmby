@@ -349,12 +349,17 @@ def build_template_vars(
     rating = "" if rating100 is None else str(rating100)
 
     # 可能的外部 ID（例如 stashdb）
+    # 格式：endpoint|stash_id（供 Emby StashBox 插件使用）
     external_id = ""
     stash_ids = scene.get("stash_ids") or []
     if stash_ids and isinstance(stash_ids, list):
         s0 = stash_ids[0]
         if isinstance(s0, dict):
-            external_id = s0.get("stash_id") or ""
+            endpoint = s0.get("endpoint", "")
+            stash_id = s0.get("stash_id", "")
+            if endpoint and stash_id:
+                # 拼接 endpoint 和 stash_id，用 | 分隔
+                external_id = f"{endpoint}|{stash_id}"
 
     width = None
     height = None
