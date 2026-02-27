@@ -15,6 +15,10 @@ namespace Emby.Plugin.StashBox.ExternalIds
 
         public bool Supports(IHasProviderIds item)
         {
+            // 检查是否启用了源链接功能
+            if (!Plugin.Instance?.Configuration?.EnableSourceUrl ?? false)
+                return false;
+
             // 检查是否有 scene_source_url 类型的 ID
             var providerIds = item.ProviderIds;
             if (providerIds == null)

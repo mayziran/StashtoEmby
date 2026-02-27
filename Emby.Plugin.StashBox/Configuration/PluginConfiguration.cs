@@ -11,6 +11,7 @@ namespace Emby.Plugin.StashBox.Configuration
             this.EnableFansDB = true;
             this.EnableJAVStash = true;
             this.EnablePMVStash = true;
+            this.EnableSourceUrl = true;
         }
 
         public override string EditorTitle => "StashBox";
@@ -20,5 +21,6 @@ namespace Emby.Plugin.StashBox.Configuration
         public bool EnableFansDB { get; set; }
         public bool EnableJAVStash { get; set; }
         public bool EnablePMVStash { get; set; }
+        public bool EnableSourceUrl { get; set; }
     }
 }
