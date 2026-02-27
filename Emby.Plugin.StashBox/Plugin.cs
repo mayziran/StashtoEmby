@@ -1,11 +1,7 @@
 using System;
 using MediaBrowser.Common;
 using MediaBrowser.Common.Plugins;
-using MediaBrowser.Controller.Plugins;
-using MediaBrowser.Model.Logging;
 using Emby.Plugin.StashBox.Configuration;
-
-[assembly: CLSCompliant(false)]
 
 namespace Emby.Plugin.StashBox
 {

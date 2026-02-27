@@ -13,8 +13,6 @@ namespace Emby.Plugin.StashBox.Configuration
             this.EnablePMVStash = true;
         }
 
-        public override string EditorTitle => Plugin.Instance?.Name ?? "StashBox";
-
         public bool EnableStashDB { get; set; }
         public bool EnableThePornDB { get; set; }
         public bool EnableFansDB { get; set; }
