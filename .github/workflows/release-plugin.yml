@@ -28,6 +28,11 @@ jobs:
     - name: Setup MSBuild
       uses: microsoft/setup-msbuild@v2
 
+    - name: Update manifest timestamp
+      run: |
+        $timestamp = Get-Date -Format "yyyy-MM-ddTHH:mm:ssZ"
+        (Get-Content Emby.Plugin.StashBox/manifest.json) -replace '"timestamp": "[^"]*"', "`"timestamp`": `"$timestamp`"" | Set-Content Emby.Plugin.StashBox/manifest.json
+
     - name: Restore dependencies
       run: dotnet restore ${{ env.PROJECT_PATH }}
 
