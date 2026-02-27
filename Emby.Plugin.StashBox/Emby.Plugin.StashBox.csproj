@@ -6,6 +6,8 @@
     <RootNamespace>Emby.Plugin.StashBox</RootNamespace>
     <Configurations>Debug;Release;Release.Emby;Debug.Emby</Configurations>
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+    <AssemblyVersion>1.0.3.0</AssemblyVersion>
+    <FileVersion>1.0.3.0</FileVersion>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)'=='Debug.Emby'">

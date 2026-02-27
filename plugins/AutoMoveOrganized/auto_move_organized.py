@@ -369,8 +369,8 @@ def build_template_vars(
                 # 移除 .org/.net/.cc 等后缀
                 identifier = domain.split('.')[0]
 
-                # 存 scenes/{uuid} 格式（与 ThePornDB 插件一致）
-                external_id = f"scenes/{stash_id}"
+                # 存 scenes\{uuid} 格式（Emby 需要使用反斜杠避免被当作分隔符）
+                external_id = f"scenes\\{stash_id}"
 
                 # 直接用 identifier 作为 type（小写）
                 nfo_type = identifier
