@@ -32,7 +32,7 @@ namespace Emby.Plugin.StashBox.ExternalIds
         /// <summary>
         /// 网站地址
         /// </summary>
-        public string Website => Plugin.Instance.Configuration.DefaultEndpoint?.Replace("/graphql", "") ?? "https://stashdb.org";
+        public string Website => Plugin.Instance?.Configuration?.DefaultEndpoint?.Replace("/graphql", "") ?? "https://stashdb.org";
 
         /// <summary>
         /// 检查是否支持该媒体类型
@@ -69,7 +69,7 @@ namespace Emby.Plugin.StashBox.ExternalIds
                     var baseUrl = GetBaseUrlFromEndpoint(endpoint);
                     if (!string.IsNullOrEmpty(baseUrl) && !string.IsNullOrEmpty(stashId))
                     {
-                        return $"{baseUrl}/scenes/{stashId}";
+                        return baseUrl + "/scenes/" + stashId;
                     }
                 }
                 else if (parts.Length == 1)
@@ -78,8 +78,8 @@ namespace Emby.Plugin.StashBox.ExternalIds
                     var stashId = parts[0];
                     if (!string.IsNullOrEmpty(stashId))
                     {
-                        var baseUrl = Plugin.Instance.Configuration.DefaultEndpoint?.Replace("/graphql", "") ?? "https://stashdb.org";
-                        return $"{baseUrl}/scenes/{stashId}";
+                        var baseUrl = GetBaseUrlFromEndpoint(null);
+                        return baseUrl + "/scenes/" + stashId;
                     }
                 }
             }
@@ -93,16 +93,20 @@ namespace Emby.Plugin.StashBox.ExternalIds
         /// <returns>网站基础 URL</returns>
         private string GetBaseUrlFromEndpoint(string endpoint)
         {
+            // 获取配置（如果为空则使用默认值）
+            var config = Plugin.Instance?.Configuration;
+            var defaultEndpoint = config?.DefaultEndpoint ?? "https://stashdb.org/graphql";
+
             if (string.IsNullOrEmpty(endpoint))
             {
-                return Plugin.Instance.Configuration.DefaultEndpoint?.Replace("/graphql", "");
+                return defaultEndpoint.Replace("/graphql", "");
             }
 
             // 移除 /graphql 后缀
             var baseUrl = endpoint.Replace("/graphql", "");
 
             // 从配置中读取已知的 endpoint 列表
-            var knownEndpoints = Plugin.Instance.Configuration.KnownEndpoints
+            var knownEndpoints = config?.KnownEndpoints
                 ?.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries)
                 .Select(e => e.Trim())
                 .ToList() ?? new List<string>();
