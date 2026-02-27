@@ -1656,6 +1656,12 @@ def write_nfo_for_scene(video_path: str, scene: Dict[str, Any], settings: Dict[s
     if vars_map.get("id"):
         uid_local = ET.SubElement(root, "uniqueid", {"type": "stash"})
         uid_local.text = str(vars_map.get("id"))
+    
+    # 源链接：写入 scene_source_url 类型的 uniqueid，供 Emby 插件显示"源链接"按钮
+    # 同时保留 <url> 标签以兼容 Kodi
+    if url0:
+        uid_url = ET.SubElement(root, "uniqueid", {"type": "scene_source_url"})
+        uid_url.text = url0
 
     # 演员列表
     performers = scene.get("performers") or []
