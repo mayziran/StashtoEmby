@@ -25,7 +25,9 @@ namespace Emby.Plugin.StashBox.ExternalIds
             if (providerIds == null)
                 return false;
 
-            return providerIds.ContainsKey(Key);
+            // 支持影片、合集、演员
+            return (item is Movie || item is BoxSet || item is Person) 
+                   && providerIds.ContainsKey(Key);
         }
     }
 }

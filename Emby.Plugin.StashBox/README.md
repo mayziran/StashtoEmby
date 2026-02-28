@@ -12,6 +12,7 @@ Emby 插件，支持多个 Stash-Box 实例的外部 ID 跳转。
   - **PMVStash** - https://pmvstash.org
 - 每个实例可独立启用/禁用
 - **源链接按钮**：跳转到原始影片来源页面
+- **支持影片、合集、演员三种实体类型**
 
 ## 安装
 
@@ -38,9 +39,22 @@ Emby 插件，支持多个 Stash-Box 实例的外部 ID 跳转。
 
 ### Stash-Box 实例
 
+**影片**:
 ```xml
 <uniqueid type="stashdb">scenes\019bb7c5-xxxx-xxxx</uniqueid>
 <uniqueid type="theporndb">scenes\7322d484-xxxx-xxxx</uniqueid>
+```
+
+**合集**:
+```xml
+<uniqueid type="stashdb">studios\019bb7c5-xxxx-xxxx</uniqueid>
+<uniqueid type="theporndb">studios\7322d484-xxxx-xxxx</uniqueid>
+```
+
+**演员**:
+```xml
+<uniqueid type="stashdb">performers\019bb7c5-xxxx-xxxx</uniqueid>
+<uniqueid type="theporndb">performers\7322d484-xxxx-xxxx</uniqueid>
 ```
 
 ### 源链接
@@ -54,9 +68,23 @@ Emby 插件，支持多个 Stash-Box 实例的外部 ID 跳转。
 ## 使用
 
 1. 配合 `auto_move_organized.py` 脚本自动生成 NFO
-2. 在 Emby 中刷新媒体库
-3. 安装后，Emby 详情页会显示外部链接按钮，点击即可跳转到对应 Stash-Box 实例或源页面
+2. 配合 `StudioToCollection` 插件同步工作室元数据（包含 StashDB 等 ID）
+3. 配合 `actorSyncEmby` 插件同步演员元数据（包含 StashDB 等 ID）
+4. 在 Emby 中刷新媒体库
+5. 安装后，Emby 详情页会显示外部链接按钮，点击即可跳转到对应 Stash-Box 实例或源页面
+
+### 示例
+
+- **影片页面**显示 "StashDB" 按钮 → 跳转到 `https://stashdb.org/scenes/xxxxx`
+- **合集页面**显示 "StashDB" 按钮 → 跳转到 `https://stashdb.org/studios/xxxxx`
+- **演员页面**显示 "StashDB" 按钮 → 跳转到 `https://stashdb.org/performers/xxxxx`
+- **源链接按钮** → 跳转到 `https://www.example.com/path/to/video.html`
 
 ## 支持的 Emby 版本
 
 - Emby Server 4.7.x - 4.9.x
+
+## 版本历史
+
+- **1.0.6** - 添加合集和演员的外部链接支持（所有 5 个 Stash-Box 实例和源链接）
+- **1.0.5** - 添加源链接按钮

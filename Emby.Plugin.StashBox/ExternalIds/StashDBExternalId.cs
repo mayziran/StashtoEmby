@@ -16,7 +16,8 @@ namespace Emby.Plugin.StashBox.ExternalIds
         {
             if (!Plugin.Instance?.Configuration?.EnableStashDB ?? false)
                 return false;
-            return item is Movie;
+            // 支持影片、合集、演员
+            return item is Movie || item is BoxSet || item is Person;
         }
     }
 }
