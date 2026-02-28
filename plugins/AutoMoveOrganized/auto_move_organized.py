@@ -1565,7 +1565,6 @@ def write_nfo_for_scene(video_path: str, scene: Dict[str, Any], settings: Dict[s
         el.text = value
 
     _set_text("title", title_for_nfo)
-    # originaltitle：只保留原始标题，不添加 code
     _set_text("originaltitle", original_title_for_nfo)
     # tagline（宣传语）：写入 code
     _set_text("tagline", code)
