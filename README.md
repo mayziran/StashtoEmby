@@ -42,6 +42,23 @@
 
 [详细文档](https://github.com/mayziran/StashtoEmby/blob/master/plugins/AutoMoveOrganized/README.md)
 
+### StudioToCollection
+
+将 Stash 工作室元数据同步到 Emby 合集（BoxSet）。
+
+**功能：**
+- 同步简介、图片（海报 + 徽标）、评分、外部 ID
+- 同步别名和网址到简介
+- 支持 Hook 自动响应（Studio.Update.Post / Studio.Create.Post）
+- 支持 Task 批量同步
+
+**配合说明：**
+- **Jellyfin.Plugin.Stash**（Emby 插件）：负责创建合集、整理影片到合集
+- **StudioToCollection**（Stash 插件）：负责同步工作室元数据到已有合集
+- 两者互补，不冲突
+
+[详细文档](https://github.com/mayziran/StashtoEmby/blob/master/plugins/StudioToCollection/README.md)
+
 ---
 
 ## Emby 插件
@@ -90,6 +107,8 @@
 - GitHub: https://github.com/DirtyRacer1337/Jellyfin.Plugin.Stash
 - 功能：跳转到本地 Stash 服务器（如 `http://localhost:9999/scenes/{id}`）
 - 适合：使用本地 Stash 管理影片，想快速访问的用户
+
+> 💡 **同步工作室元数据到合集**：配合 Jellyfin.Plugin.Stash 使用，Jellyfin.Plugin.Stash 创建合集，StudioToCollection 同步元数据
 
 ---
 

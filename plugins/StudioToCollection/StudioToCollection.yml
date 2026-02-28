@@ -1,0 +1,58 @@
+name: StudioToCollection
+description: "将 Stash 工作室元数据同步到 Emby 合集（与 Jellyfin.Plugin.Stash 配合使用）"
+version: "1.0.0"
+url: https://github.com/mayziran/StashtoEmby/tree/master/plugins/StudioToCollection
+
+settings:
+  enableHook:
+    displayName: 启用 Hook 响应
+    description: "启用后自动响应工作室创建/更新事件，同步到 Emby 合集（默认关闭）"
+    type: BOOLEAN
+  embyServer:
+    displayName: Emby 服务器地址
+    description: "Emby 服务器地址，例如：http://192.168.1.100:8096"
+    type: STRING
+  embyApiKey:
+    displayName: Emby API 密钥
+    description: "Emby 服务器 API 密钥"
+    type: STRING
+  dryRun:
+    displayName: 仅模拟
+    description: "不真正写入 Emby，只输出日志"
+    type: BOOLEAN
+  workerDelays:
+    displayName: 异步 Worker 延迟时间
+    description: "格式：等待 Stash 创建影片时间，等待 Emby 扫描时间（秒），例如：35,70。默认 35,70"
+    type: STRING
+  scheduledTaskId:
+    displayName: Emby 计划任务 ID（可选）
+    description: "Create Hook 时触发的 Emby 计划任务 ID（如 Jellyfin.Plugin.Stash 的刷新任务），不填则不触发"
+    type: STRING
+  enableWorkerLog:
+    displayName: 启用异步 Worker 日志
+    description: "是否将 Create Hook 触发的异步同步脚本日志写入到 studio_sync_worker.log 文件（关闭后日志将完全丢弃，建议有问题时打开查看）"
+    type: BOOLEAN
+
+exec:
+  - python
+  - "{pluginDir}/StudioToCollection.py"
+interface: raw
+errLog: info
+
+tasks:
+  - name: 同步所有工作室
+    description: "手动执行：同步所有工作室元数据到 Emby 合集"
+    defaultArgs: {}
+
+hooks:
+  - name: syncStudioOnUpdate
+    description: "在工作室更新后同步元数据到 Emby 合集"
+    triggeredBy:
+      - Studio.Update.Post
+    defaultArgs: {}
+
+  - name: syncStudioOnCreate
+    description: "在工作室创建后异步同步元数据到 Emby 合集（延迟执行）"
+    triggeredBy:
+      - Studio.Create.Post
+    defaultArgs: {}
