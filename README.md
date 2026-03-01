@@ -1,4 +1,4 @@
-# 输出到兼容Emby目录的 Stash 插件
+# Stash 对接 Emby 的全套解决方案
 
 为 [Stash](https://github.com/stashapp/stash) 提供插件扩展功能，这是一个开源的媒体整理工具。
 
