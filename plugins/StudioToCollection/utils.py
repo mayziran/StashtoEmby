@@ -113,7 +113,7 @@ def build_overview(studio: Dict[str, Any]) -> str:
 
 def build_provider_ids(studio: Dict[str, Any]) -> Dict[str, str]:
     """
-    构建 ProviderIds（支持所有 5 个 Stash-Box 实例）
+    构建 ProviderIds（支持所有 5 个 Stash-Box 实例 + 源链接）
     
     支持的实例:
         - StashDB
@@ -121,6 +121,7 @@ def build_provider_ids(studio: Dict[str, Any]) -> Dict[str, str]:
         - FansDB
         - JAVStash
         - PMVStash
+        - scene_source_url (源链接)
     """
     provider_ids = {}
 
@@ -166,12 +167,18 @@ def build_provider_ids(studio: Dict[str, Any]) -> Dict[str, str]:
             if identifier in key_mapping and ids:
                 provider_ids[key_mapping[identifier]] = ",".join(ids)
 
+    # 源链接：写入 scene_source_url（去掉协议前缀，反斜杠替代正斜杠）
+    urls = studio.get("urls", [])
+    if urls:
+        url_without_scheme = urls[0].replace("https://", "").replace("http://", "")
+        provider_ids["scene_source_url"] = url_without_scheme.replace('/', '\\')
+
     return provider_ids
 
 
 def build_external_id(studio: Dict[str, Any]) -> Optional[Dict[str, str]]:
     """
-    构建 ExternalId（用于 NFO uniqueid 写入）
+    构建 ExternalId（用于 Stash-Box ID 跳转）
     
     返回格式:
         {
@@ -179,11 +186,12 @@ def build_external_id(studio: Dict[str, Any]) -> Optional[Dict[str, str]]:
             "theporndb": "studios\\{uuid}",
             "fansdb": "studios\\{uuid}",
             ...
-            "scene_source_url": "www.example.com\\path"
         }
+    
+    注意：源链接已移至 ProviderIds.scene_source_url
     """
     external_ids = {}
-    
+
     # 处理所有 stash_ids，写入 studios\{uuid} 格式
     if studio.get("stash_ids"):
         for s in studio["stash_ids"]:
@@ -193,20 +201,14 @@ def build_external_id(studio: Dict[str, Any]) -> Optional[Dict[str, str]]:
             stash_id = s.get("stash_id", "")
             if not endpoint or not stash_id:
                 continue
-            
+
             # 从 endpoint 提取标识符
             base_url = endpoint.replace("/graphql", "")
             domain = base_url.replace("https://", "").replace("http://", "")
             identifier = domain.split('.')[0].lower()
-            
+
             # 写入 studios\{uuid} 格式（反斜杠）
             external_ids[identifier] = f"studios\\{stash_id}"
-    
-    # 源链接：写入 scene_source_url（去掉协议前缀，反斜杠替代正斜杠）
-    urls = studio.get("urls", [])
-    if urls:
-        url_without_scheme = urls[0].replace("https://", "").replace("http://", "")
-        external_ids["scene_source_url"] = url_without_scheme.replace('/', '\\')
 
     return external_ids if external_ids else None
 
