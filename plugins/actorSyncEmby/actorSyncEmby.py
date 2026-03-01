@@ -196,8 +196,9 @@ def start_async_worker(performer_id: int, settings: Dict[str, Any]) -> None:
     log.info(f"[{PLUGIN_ID}] 启动后台工作脚本")
 
     try:
-        # worker 日志只写本地文件，无需重定向 stdout/stderr
-        subprocess.Popen(cmd, start_new_session=True)
+        # 必须重定向 stdout/stderr，否则子进程继承句柄会导致主脚本无法退出
+        subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                        start_new_session=True)
         log.info(f"[{PLUGIN_ID}] 后台工作脚本已启动 (独立进程)")
     except Exception as e:
         log.error(f"[{PLUGIN_ID}] 启动后台工作脚本失败：{e}")
