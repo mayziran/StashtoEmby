@@ -20,7 +20,6 @@ _enable_worker_log = True  # 在 main() 中从配置设置
 def log_info(message: str) -> None:
     timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
     log_line = f"[{timestamp}] [INFO] {message}"
-    print(log_line, flush=True)
     if _enable_worker_log:
         try:
             with open(LOG_FILE, "a", encoding="utf-8") as f:
@@ -32,7 +31,6 @@ def log_info(message: str) -> None:
 def log_error(message: str) -> None:
     timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
     log_line = f"[{timestamp}] [ERROR] {message}"
-    print(log_line, flush=True)
     if _enable_worker_log:
         try:
             with open(LOG_FILE, "a", encoding="utf-8") as f:
