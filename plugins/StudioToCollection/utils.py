@@ -45,53 +45,6 @@ def get_emby_user_id(emby_server: str, emby_api_key: str) -> Optional[str]:
         return None
 
 
-def find_collection_by_name(
-    emby_server: str,
-    emby_api_key: str,
-    user_id: str,
-    studio_name: str
-) -> Optional[Dict[str, Any]]:
-    """按名称搜索合集（精确匹配）"""
-    try:
-        url = f"{emby_server}/emby/Users/{user_id}/Items"
-        params = {
-            "api_key": emby_api_key,
-            "IncludeItemTypes": "BoxSet",
-            "SearchTerm": studio_name,
-            "Limit": 10
-        }
-        response = requests.get(url, params=params, timeout=30)
-        items = response.json().get("Items", [])
-
-        for item in items:
-            if item["Name"].lower() == studio_name.lower():
-                return item
-        return None
-    except Exception as e:
-        sys.stderr.write(f"搜索合集失败：{e}\n")
-        return None
-
-
-def get_all_collections(
-    emby_server: str,
-    emby_api_key: str,
-    user_id: str
-) -> List[Dict[str, Any]]:
-    """获取所有合集（Task 专用）"""
-    try:
-        url = f"{emby_server}/emby/Users/{user_id}/Items"
-        params = {
-            "api_key": emby_api_key,
-            "IncludeItemTypes": "BoxSet",
-            "Limit": 1000
-        }
-        response = requests.get(url, params=params, timeout=30)
-        return response.json().get("Items", [])
-    except Exception as e:
-        sys.stderr.write(f"获取合集失败：{e}\n")
-        return []
-
-
 # ========== 数据构建函数 ==========
 
 def build_overview(studio: Dict[str, Any]) -> str:

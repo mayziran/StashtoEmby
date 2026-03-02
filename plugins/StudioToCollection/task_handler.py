@@ -9,18 +9,42 @@ Task 处理器 - 批量同步所有工作室
     5. 输出统计信息
 """
 
-from typing import Any, Dict
+from typing import Any, Dict, List
 
+import requests
 import stashapi.log as log
 from utils import (
     STUDIO_FRAGMENT_FOR_API,
     get_emby_user_id,
-    get_all_collections,
     build_emby_data,
 )
 from emby_uploader import upload_studio_to_emby
 
 PLUGIN_ID = "StudioToCollection"
+
+
+def get_all_collections(
+    emby_server: str,
+    emby_api_key: str,
+    user_id: str
+) -> List[Dict[str, Any]]:
+    """
+    获取所有合集（Task 专用）
+    
+    只在 task_handler 中使用，不放在 utils.py 中
+    """
+    try:
+        url = f"{emby_server}/emby/Users/{user_id}/Items"
+        params = {
+            "api_key": emby_api_key,
+            "IncludeItemTypes": "BoxSet",
+            "Limit": 1000
+        }
+        response = requests.get(url, params=params, timeout=30)
+        return response.json().get("Items", [])
+    except Exception as e:
+        log.error(f"获取合集失败：{e}")
+        return []
 
 
 def handle_task(stash: Any, settings: Dict[str, Any], task_log_func: Any) -> str:

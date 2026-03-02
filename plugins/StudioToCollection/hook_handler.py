@@ -11,16 +11,47 @@ Hook 处理器 - 处理工作室创建/更新事件
 
 from typing import Any, Dict, Callable
 
+import requests
 import stashapi.log as log
 from utils import (
     STUDIO_FRAGMENT_FOR_API,
     get_emby_user_id,
-    find_collection_by_name,
     build_emby_data,
 )
 from emby_uploader import upload_studio_to_emby
 
 PLUGIN_ID = "StudioToCollection"
+
+
+def find_collection_by_name(
+    emby_server: str,
+    emby_api_key: str,
+    user_id: str,
+    studio_name: str
+) -> Optional[Dict[str, Any]]:
+    """
+    按名称搜索合集（精确匹配）
+    
+    只在 hook_handler 中使用，不放在 utils.py 中
+    """
+    try:
+        url = f"{emby_server}/emby/Users/{user_id}/Items"
+        params = {
+            "api_key": emby_api_key,
+            "IncludeItemTypes": "BoxSet",
+            "SearchTerm": studio_name,
+            "Limit": 10
+        }
+        response = requests.get(url, params=params, timeout=30)
+        items = response.json().get("Items", [])
+
+        for item in items:
+            if item["Name"].lower() == studio_name.lower():
+                return item
+        return None
+    except Exception as e:
+        log.error(f"搜索合集失败：{e}")
+        return None
 
 
 def handle_create_hook(
