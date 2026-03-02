@@ -4,10 +4,12 @@ studio_sync_worker.py - Create Hook 异步执行
 职责:
     1. 接收 hook 传递的配置（studio 原始数据、emby_data、collection_id 等）
     2. 延迟等待 + 触发 Emby 计划任务
-    3. 搜索合集确认存在
+    3. 搜索合集确认存在（三次重试机制）
     4. 调用 emby_uploader.upload_studio_to_emby 上传
 
-注意：本模块只负责延迟等待，数据构建由 hook_handler 完成，上传由 emby_uploader 完成
+注意:
+    - 本模块自包含，不依赖 utils.py
+    - 使用 worker 自己的日志系统（写入文件）
 """
 
 import base64
@@ -22,9 +24,6 @@ import requests
 # 导入 emby_uploader 用于上传
 sys.path.insert(0, os.path.dirname(__file__))
 from emby_uploader import upload_studio_to_emby
-
-# 导入 utils 工具函数
-from utils import find_collection_by_name
 
 LOG_FILE = os.path.join(os.path.dirname(__file__), "studio_sync_worker.log")
 _enable_worker_log = True  # 在 main() 中从配置设置
@@ -60,6 +59,37 @@ def load_config() -> Dict[str, Any]:
     config_b64 = sys.argv[1]
     config_json = base64.b64decode(config_b64).decode('utf-8')
     return json.loads(config_json)
+
+
+def find_collection_by_name(
+    emby_server: str,
+    emby_api_key: str,
+    user_id: str,
+    studio_name: str
+) -> Optional[Dict[str, Any]]:
+    """
+    按名称搜索合集（精确匹配）- worker 内部实现
+    
+    使用 worker 自己的日志系统，不依赖 utils.py
+    """
+    try:
+        url = f"{emby_server}/emby/Users/{user_id}/Items"
+        params = {
+            "api_key": emby_api_key,
+            "IncludeItemTypes": "BoxSet",
+            "SearchTerm": studio_name,
+            "Limit": 10
+        }
+        response = requests.get(url, params=params, timeout=30)
+        items = response.json().get("Items", [])
+
+        for item in items:
+            if item["Name"].lower() == studio_name.lower():
+                return item
+        return None
+    except Exception as e:
+        log_error(f"搜索合集失败：{e}")
+        return None
 
 
 def trigger_emby_library_refresh(emby_server: str, emby_api_key: str) -> bool:

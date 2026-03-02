@@ -39,9 +39,29 @@ def handle_task(stash: Any, settings: Dict[str, Any], task_log_func: Any) -> str
         log.info(f"[{PLUGIN_ID}] Task 模式启动")
         task_log_func("开始同步工作室", progress=0.0)
 
-        # 1. 获取所有工作室
+        # 1. 获取所有工作室（使用 find_studios 分页获取）
         try:
-            all_studios = stash.all_studios(fragment=STUDIO_FRAGMENT_FOR_API)
+            all_studios = []
+            page = 1
+            per_page = 1000
+            
+            while True:
+                page_studios = stash.find_studios(
+                    f=None,
+                    filter={"page": page, "per_page": per_page},
+                    fragment=STUDIO_FRAGMENT_FOR_API
+                )
+                
+                if not page_studios:
+                    break
+                    
+                all_studios.extend(page_studios)
+                
+                if len(page_studios) < per_page:
+                    break
+                    
+                page += 1
+            
             total_count = len(all_studios)
             log.info(f"[{PLUGIN_ID}] 获取到 {total_count} 个工作室")
         except Exception as e:
