@@ -12,7 +12,6 @@
 """
 
 import json
-import sys
 from typing import Any, Dict, List, Optional
 
 import requests
@@ -42,12 +41,6 @@ def task_log(message: str, progress: float | None = None) -> None:
         print(json.dumps(payload), flush=True)
     except Exception as e:
         log.error(f"[{PLUGIN_ID}] Task log 失败：{e}")
-
-
-def read_input() -> Dict[str, Any]:
-    """从 stdin 读取 Stash 插件输入"""
-    raw = sys.stdin.read()
-    return json.loads(raw) if raw else {}
 
 
 def get_emby_user_id(emby_server: str, emby_api_key: str) -> Optional[str]:
@@ -259,7 +252,6 @@ def handle_task(
         处理结果消息
     """
     try:
-        log.info(f"[{PLUGIN_ID}] 演员同步 Task 启动")
         task_log_func("开始同步工作室演员", progress=0.0)
 
         # 1. 获取所有工作室
@@ -297,7 +289,6 @@ def handle_task(
             return msg
 
         # 2. 获取 Emby 用户 ID
-        log.info(f"[{PLUGIN_ID}] 正在获取 Emby 用户 ID...")
         user_id = get_emby_user_id(settings["emby_server"], settings["emby_api_key"])
         if not user_id:
             log.error(f"[{PLUGIN_ID}] 无法获取 Emby 用户 ID")
@@ -305,7 +296,6 @@ def handle_task(
         log.info(f"[{PLUGIN_ID}] 获取到 Emby 用户 ID: {user_id}")
 
         # 3. 获取所有合集，建立名称映射
-        log.info(f"[{PLUGIN_ID}] 正在获取 Emby 合集列表...")
         collections = get_all_collections(
             settings["emby_server"],
             settings["emby_api_key"],
@@ -373,54 +363,3 @@ def handle_task(
         log.error(f"[{PLUGIN_ID}] 执行失败：{e}")
         task_log_func(f"执行失败：{e}", progress=1.0)
         return f"执行失败：{e}"
-
-
-def main():
-    """主入口"""
-    json_input = read_input()
-    log.info(f"[{PLUGIN_ID}] 演员同步 Task 启动")
-
-    server_conn = json_input.get("server_connection") or {}
-    if not server_conn:
-        print(json.dumps({"error": "Missing server_connection"}))
-        return
-
-    if server_conn.get("Host") == '0.0.0.0':
-        server_conn["Host"] = "localhost"
-
-    from stashapi.stashapp import StashInterface
-    stash = StashInterface(server_conn)
-
-    # 加载配置
-    try:
-        cfg = stash.get_configuration()
-        plugins_settings = cfg.get("plugins", {}).get(PLUGIN_ID, {})
-
-        def _get_val(key: str, default):
-            v = plugins_settings.get(key, default)
-            if isinstance(v, dict) and "value" in v:
-                return v.get("value", default)
-            return v
-
-        settings = {
-            "emby_server": _get_val("embyServer", ""),
-            "emby_api_key": _get_val("embyApiKey", ""),
-            "dry_run": bool(_get_val("dryRun", False)),
-            "parent_ids": _get_val("parentIds", ""),
-        }
-    except Exception as e:
-        log.error(f"[{PLUGIN_ID}] 加载配置失败：{e}")
-        settings = {
-            "emby_server": "",
-            "emby_api_key": "",
-            "dry_run": False,
-            "parent_ids": "",
-        }
-
-    # 执行 Task
-    msg = handle_task(stash, settings, task_log)
-    print(json.dumps({"output": msg, "progress": 1.0}) + "\n")
-
-
-if __name__ == "__main__":
-    main()
