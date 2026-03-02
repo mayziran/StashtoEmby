@@ -7,6 +7,7 @@
     - 数据构建函数
 """
 
+import sys
 from typing import Any, Dict, List, Optional
 
 import requests
@@ -40,7 +41,7 @@ def get_emby_user_id(emby_server: str, emby_api_key: str) -> Optional[str]:
         users = response.json()
         return users[0]["Id"] if users else None
     except Exception as e:
-        print(f"获取 Emby 用户 ID 失败：{e}")
+        sys.stderr.write(f"获取 Emby 用户 ID 失败：{e}\n")
         return None
 
 
@@ -61,13 +62,13 @@ def find_collection_by_name(
         }
         response = requests.get(url, params=params, timeout=30)
         items = response.json().get("Items", [])
-        
+
         for item in items:
             if item["Name"].lower() == studio_name.lower():
                 return item
         return None
     except Exception as e:
-        print(f"搜索合集失败：{e}")
+        sys.stderr.write(f"搜索合集失败：{e}\n")
         return None
 
 
@@ -87,7 +88,7 @@ def get_all_collections(
         response = requests.get(url, params=params, timeout=30)
         return response.json().get("Items", [])
     except Exception as e:
-        print(f"获取合集失败：{e}")
+        sys.stderr.write(f"获取合集失败：{e}\n")
         return []
 
 

@@ -90,17 +90,19 @@ def load_settings(stash: StashInterface) -> Dict[str, Any]:
     return settings
 
 
-def start_worker(studio_id: int, studio_name: str, emby_data: Dict[str, Any], collection_id: str, user_id: str, settings: Dict[str, Any]) -> None:
+def start_worker(
+    studio_id: int,
+    studio_name: str,
+    studio: Dict[str, Any],
+    emby_data: Dict[str, Any],
+    collection_id: str,
+    user_id: str,
+    settings: Dict[str, Any],
+    stash_url: str
+) -> None:
     """启动 worker 异步执行（Create Hook 专用）"""
     worker_script = os.path.join(os.path.dirname(__file__), "studio_sync_worker.py")
-    
-    # 构建 Stash URL
-    server_conn = settings.get("server_connection", {})
-    scheme = server_conn.get("Scheme", "http")
-    host = server_conn.get("Host", "localhost")
-    port = server_conn.get("Port", "9999")
-    stash_url = f"{scheme}://{host}:{port}"
-    
+
     # 解析延迟配置（格式："35,70"）
     worker_delays_str = settings.get("worker_delays", "35,70")
     try:
@@ -109,14 +111,14 @@ def start_worker(studio_id: int, studio_name: str, emby_data: Dict[str, Any], co
         emby_wait = int(delays_parts[1].strip()) if len(delays_parts) > 1 else 70
     except Exception:
         stash_wait, emby_wait = 35, 70
-    
+
     config = {
         "emby_server": settings["emby_server"],
         "emby_api_key": settings["emby_api_key"],
         "stash_url": stash_url,
-        "stash_api_key": settings["stash_api_key"],
         "studio_id": studio_id,
         "studio_name": studio_name,
+        "studio": studio,  # 工作室原始数据
         "emby_data": emby_data,  # 已构建好的数据
         "collection_id": collection_id,  # 合集 ID
         "user_id": user_id,  # Emby 用户 ID（hook 已获取）
@@ -126,10 +128,10 @@ def start_worker(studio_id: int, studio_name: str, emby_data: Dict[str, Any], co
         "scheduled_task_id": settings.get("scheduled_task_id"),  # 计划任务 ID
         "enable_worker_log": settings.get("enable_worker_log", True),  # 是否启用 worker 日志
     }
-    
+
     config_b64 = base64.b64encode(json.dumps(config, ensure_ascii=False).encode('utf-8')).decode('ascii')
     cmd = [sys.executable, worker_script, config_b64]
-    
+
     log.info(f"[{PLUGIN_ID}] 启动 worker: {studio_name} (延迟：{stash_wait}+{emby_wait}秒)")
     subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
 
