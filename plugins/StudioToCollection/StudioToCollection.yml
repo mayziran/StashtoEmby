@@ -46,11 +46,13 @@ errLog: info
 tasks:
   - name: 同步所有工作室
     description: "手动执行：同步所有工作室元数据到 Emby 合集"
-    defaultArgs: {}
+    defaultArgs:
+      mode: "studio_sync"
 
   - name: 同步工作室演员到合集
     description: "手动执行：将所有工作室关联的演员同步到 Emby 合集（People 字段）"
-    defaultArgs: {}
+    defaultArgs:
+      mode: "performer_sync"
 
 hooks:
   - name: syncStudioOnUpdate

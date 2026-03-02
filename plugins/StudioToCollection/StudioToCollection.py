@@ -163,6 +163,9 @@ def main():
     try:
         if hook_ctx:
             # ========== Hook 模式 ==========
+            # 导入 Hook 处理器
+            from hook_handler import handle_create_hook, handle_update_hook
+
             studio_id = int(hook_ctx.get("id", 0))
             hook_type = hook_ctx.get("type", "")
 
@@ -179,10 +182,10 @@ def main():
                 msg = f"未知 Hook 类型：{hook_type}"
         else:
             # ========== Task 模式 ==========
-            # 获取任务名称，判断执行哪个 Task
-            task_name = args.get("task_name", "") if args else ""
-            
-            if task_name == "同步工作室演员到合集":
+            # 获取 mode 参数，判断执行哪个 Task
+            mode = args.get("mode", "") if args else ""
+
+            if mode == "performer_sync":
                 # 执行演员同步 Task
                 log.info(f"[{PLUGIN_ID}] 演员同步 Task 模式")
                 from studios_performer_sync import handle_task as handle_performer_task
