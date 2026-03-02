@@ -344,9 +344,9 @@ def build_template_vars(
             if isinstance(g, dict):
                 group_name = g.get("name") or ""
 
-    # 评分
+    # 评分（转换为 0-10 分制，保留 1 位小数，如 85 → 8.5）
     rating100 = scene.get("rating100")
-    rating = "" if rating100 is None else str(rating100)
+    rating = "" if rating100 is None else str(round(rating100 / 10, 1))
 
     # 可能的外部 ID（供 Emby StashBox 插件使用）
     # 格式：scenes/{uuid}（与 ThePornDB 插件保持一致）
