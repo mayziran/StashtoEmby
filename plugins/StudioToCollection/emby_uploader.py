@@ -272,11 +272,10 @@ def upload_metadata(
 # =============================================================================
 
 def upload_studio_to_emby(
-    studio: Dict[str, Any],
+    emby_data: Dict[str, Any],
     collection_id: str,
     emby_server: str,
     emby_api_key: str,
-    emby_data: Dict[str, Any],
     user_id: str,
     server_conn: Dict[str, Any],
     stash_api_key: str = "",
@@ -284,24 +283,23 @@ def upload_studio_to_emby(
 ) -> bool:
     """
     上传工作室到 Emby（统一上传入口）
-    
+
     职责：接收已构建好的 emby_data，负责上传元数据和图片
-    
+
     参考 actorSyncEmby 插件：
     - 先上传元数据
     - 再下载并上传图片
-    
+
     Args:
-        studio: 工作室原始数据（用于获取 image_path）
+        emby_data: 已构建好的 Emby 数据（由 utils.build_emby_data 构建）
         collection_id: Emby 合集 ID
         emby_server: Emby 服务器地址
         emby_api_key: Emby API 密钥
-        emby_data: 已构建好的 Emby 数据（由 utils.build_emby_data 构建）
         user_id: Emby 用户 ID（用于获取现有数据）
         server_conn: Stash 服务器连接信息（用于下载图片）
         stash_api_key: Stash API 密钥（用于下载图片）
         dry_run: 是否仅模拟
-    
+
     Returns:
         上传是否成功
     """
@@ -315,14 +313,14 @@ def upload_studio_to_emby(
         dry_run=dry_run
     ):
         return False
-    
+
     # 上传图片
-    if studio.get("image_path"):
-        image_url = studio["image_path"]
-        
+    if emby_data.get("_image_path"):
+        image_url = emby_data["_image_path"]
+
         # 下载图片，获取图片数据和 Content-Type（参考 actorSyncEmby）
         image_bytes, content_type = download_image(image_url, server_conn, stash_api_key)
-        
+
         if image_bytes:
             # 使用从 Stash 获取的 Content-Type 上传图片（参考 actorSyncEmby）
             _upload_image_to_emby(
@@ -334,7 +332,7 @@ def upload_studio_to_emby(
                 content_type=content_type,
                 dry_run=dry_run
             )
-            
+
             _upload_image_to_emby(
                 emby_server=emby_server,
                 emby_api_key=emby_api_key,
@@ -346,5 +344,5 @@ def upload_studio_to_emby(
             )
         else:
             log.error(f"[{PLUGIN_ID}] 下载图片失败：{image_url}")
-    
+
     return True

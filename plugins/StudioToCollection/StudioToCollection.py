@@ -118,7 +118,6 @@ def start_worker(
         "emby_api_key": settings["emby_api_key"],
         "studio_id": studio_id,
         "studio_name": studio_name,
-        "studio": studio,
         "emby_data": emby_data,
         "collection_id": collection_id,
         "user_id": user_id,
@@ -127,8 +126,8 @@ def start_worker(
         "emby_wait": emby_wait,
         "scheduled_task_id": settings.get("scheduled_task_id"),
         "enable_worker_log": settings.get("enable_worker_log", True),
-        "server_conn": server_conn,  # 传递 server_conn
-        "stash_api_key": stash_api_key  # 传递 stash_api_key
+        "server_conn": server_conn,
+        "stash_api_key": stash_api_key
     }
 
     config_b64 = base64.b64encode(json.dumps(config, ensure_ascii=False).encode('utf-8')).decode('ascii')

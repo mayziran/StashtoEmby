@@ -151,11 +151,10 @@ def handle_update_hook(
 
     # 直接调用 emby_uploader 上传（参考 actorSyncEmby）
     if upload_studio_to_emby(
-        studio=studio,
+        emby_data=emby_data,
         collection_id=collection["Id"],
         emby_server=settings["emby_server"],
         emby_api_key=settings["emby_api_key"],
-        emby_data=emby_data,
         user_id=user_id,
         server_conn=settings.get("server_connection", {}),
         stash_api_key=settings.get("stash_api_key", ""),

@@ -181,14 +181,13 @@ def sync_studio_to_collection(config: Dict[str, Any]) -> str:
     if collection:
         log_info(f"[{studio_name}] ✓ 找到合集，开始上传...")
         if upload_studio_to_emby(
-            studio=config["studio"],
+            emby_data=config["emby_data"],
             collection_id=collection["Id"],
             emby_server=config["emby_server"],
             emby_api_key=config["emby_api_key"],
-            emby_data=config["emby_data"],
             user_id=user_id,
-            server_conn=config.get("server_conn", {}),  # 传递 server_conn
-            stash_api_key=config.get("stash_api_key", ""),  # 传递 stash_api_key
+            server_conn=config.get("server_conn", {}),
+            stash_api_key=config.get("stash_api_key", ""),
             dry_run=config.get("dry_run", False)
         ):
             return f"工作室 {studio_name} 同步完成"
@@ -214,14 +213,13 @@ def sync_studio_to_collection(config: Dict[str, Any]) -> str:
     if collection:
         log_info(f"[{studio_name}] ✓ 找到合集，开始上传...")
         if upload_studio_to_emby(
-            studio=config["studio"],
+            emby_data=config["emby_data"],
             collection_id=collection["Id"],
             emby_server=config["emby_server"],
             emby_api_key=config["emby_api_key"],
-            emby_data=config["emby_data"],
             user_id=user_id,
-            server_conn=config.get("server_conn", {}),  # 传递 server_conn
-            stash_api_key=config.get("stash_api_key", ""),  # 传递 stash_api_key
+            server_conn=config.get("server_conn", {}),
+            stash_api_key=config.get("stash_api_key", ""),
             dry_run=config.get("dry_run", False)
         ):
             return f"工作室 {studio_name} 同步完成"
@@ -247,14 +245,13 @@ def sync_studio_to_collection(config: Dict[str, Any]) -> str:
     if collection:
         log_info(f"[{studio_name}] ✓ 找到合集，开始上传...")
         if upload_studio_to_emby(
-            studio=config["studio"],
+            emby_data=config["emby_data"],
             collection_id=collection["Id"],
             emby_server=config["emby_server"],
             emby_api_key=config["emby_api_key"],
-            emby_data=config["emby_data"],
             user_id=user_id,
-            server_conn=config.get("server_conn", {}),  # 传递 server_conn
-            stash_api_key=config.get("stash_api_key", ""),  # 传递 stash_api_key
+            server_conn=config.get("server_conn", {}),
+            stash_api_key=config.get("stash_api_key", ""),
             dry_run=config.get("dry_run", False)
         ):
             return f"工作室 {studio_name} 同步完成"

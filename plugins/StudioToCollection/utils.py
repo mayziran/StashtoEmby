@@ -170,29 +170,33 @@ def build_external_id(studio: Dict[str, Any]) -> Optional[Dict[str, str]]:
 def build_emby_data(studio: Dict[str, Any], collection_id: str) -> Dict[str, Any]:
     """
     构建完整的 Emby 数据
-    
+
     Args:
         studio: 工作室数据
         collection_id: 合集 ID
-    
+
     Returns:
         Emby 数据字典
     """
     emby_data = {"Id": collection_id}
-    
+
     overview = build_overview(studio)
     if overview:
         emby_data["Overview"] = overview
-    
+
     if studio.get("rating100"):
         emby_data["CommunityRating"] = studio["rating100"] / 10
-    
+
     provider_ids = build_provider_ids(studio)
     if provider_ids:
         emby_data["ProviderIds"] = provider_ids
-    
+
     external_id = build_external_id(studio)
     if external_id:
         emby_data["ExternalId"] = external_id
-    
+
+    # 添加图片路径（供 emby_uploader 下载图片使用）
+    if studio.get("image_path"):
+        emby_data["_image_path"] = studio["image_path"]
+
     return emby_data
