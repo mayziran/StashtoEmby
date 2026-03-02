@@ -350,30 +350,30 @@ def build_template_vars(
 
     # 可能的外部 ID（供 Emby StashBox 插件使用）
     # 格式：scenes/{uuid}（与 ThePornDB 插件保持一致）
-    external_id = ""
-    nfo_type = ""
+    # 支持多个 stash_ids，按 endpoint 分类
+    external_ids = {}  # {identifier: "scenes\\{uuid}", ...}
     stash_ids = scene.get("stash_ids") or []
     if stash_ids and isinstance(stash_ids, list):
-        s0 = stash_ids[0]
-        if isinstance(s0, dict):
-            endpoint = s0.get("endpoint", "")
-            stash_id = s0.get("stash_id", "")
-            if endpoint and stash_id:
-                # 从 endpoint 提取简短标识符（小写，直接用作 type）
-                # https://stashdb.org/graphql -> stashdb
-                # https://theporndb.net/graphql -> theporndb
-                # https://fansdb.cc/graphql -> fansdb
-                base_url = endpoint.replace("/graphql", "")
-                # 提取域名主体部分
-                domain = base_url.replace("https://", "").replace("http://", "")
-                # 移除 .org/.net/.cc 等后缀
-                identifier = domain.split('.')[0]
-
-                # 存 scenes\{uuid} 格式（Emby 需要使用反斜杠避免被当作分隔符）
-                external_id = f"scenes\\{stash_id}"
-
-                # 直接用 identifier 作为 type（小写）
-                nfo_type = identifier
+        for s in stash_ids:
+            if not isinstance(s, dict):
+                continue
+            endpoint = s.get("endpoint", "")
+            stash_id = s.get("stash_id", "")
+            if not endpoint or not stash_id:
+                continue
+            
+            # 从 endpoint 提取简短标识符（小写）
+            # https://stashdb.org/graphql -> stashdb
+            # https://theporndb.net/graphql -> theporndb
+            # https://fansdb.cc/graphql -> fansdb
+            # https://javstash.org/graphql -> javstash
+            # https://pmvstash.org/graphql -> pmvstash
+            base_url = endpoint.replace("/graphql", "")
+            domain = base_url.replace("https://", "").replace("http://", "")
+            identifier = domain.split('.')[0].lower()
+            
+            # 存 scenes\{uuid} 格式（Emby 需要使用反斜杠避免被当作分隔符）
+            external_ids[identifier] = f"scenes\\{stash_id}"
 
     width = None
     height = None
@@ -431,8 +431,7 @@ def build_template_vars(
         "original_basename": original_basename,
         "original_name": original_name,
         "ext": ext,
-        "external_id": external_id,
-        "nfo_type": nfo_type,
+        "external_ids": external_ids,  # 支持多个外部 ID
         "width": width,
         "height": height,
         "resolution": resolution,
@@ -1487,8 +1486,7 @@ def write_nfo_for_scene(video_path: str, scene: Dict[str, Any], settings: Dict[s
     year = vars_map.get("date_year") or ""
     code = vars_map.get("code") or ""
     rating = vars_map.get("rating")
-    external_id = vars_map.get("external_id") or ""
-    nfo_type = vars_map.get("nfo_type") or ""
+    external_ids = vars_map.get("external_ids") or {}  # 支持多个外部 ID
     urls = scene.get("urls") or []
     url0 = urls[0] if urls else ""
 
@@ -1646,15 +1644,17 @@ def write_nfo_for_scene(video_path: str, scene: Dict[str, Any], settings: Dict[s
         _set_text("set", collection_name)
         _set_text("collection", collection_name)
 
-    # uniqueid：根据 Stash-Box 实例类型写入对应的 type
+    # uniqueid：根据 Stash-Box 实例类型写入对应的 type（支持多个）
     # 注意：不设置 default 属性，遵循 Emby 规范（default="false" 或省略）
-    if external_id and nfo_type:
-        uid_el = ET.SubElement(root, "uniqueid", {"type": nfo_type})
-        uid_el.text = external_id
+    for identifier, ext_id in external_ids.items():
+        uid_el = ET.SubElement(root, "uniqueid", {"type": identifier})
+        uid_el.text = ext_id
+    
+    # 本地 Stash ID
     if vars_map.get("id"):
         uid_local = ET.SubElement(root, "uniqueid", {"type": "stash"})
         uid_local.text = str(vars_map.get("id"))
-    
+
     # 源链接：写入 scene_source_url 类型的 uniqueid
     if url0:
         # 去掉协议前缀，使用反斜杠替代正斜杠
