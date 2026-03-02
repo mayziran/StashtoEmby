@@ -23,6 +23,9 @@ STUDIO_FRAGMENT_FOR_API = """
     rating100
     aliases
     urls
+    tags {
+        name
+    }
     stash_ids {
         stash_id
         endpoint
@@ -50,19 +53,25 @@ def get_emby_user_id(emby_server: str, emby_api_key: str) -> Optional[str]:
 def build_overview(studio: Dict[str, Any]) -> str:
     """构建 Overview（别名 → 简介 → 链接）"""
     lines = []
-    
+
     aliases = studio.get('aliases', [])
     if aliases:
         lines.append("别名：" + " / ".join(aliases))
-    
+
     if studio.get('details'):
         lines.append(studio['details'])
-    
+
     urls = studio.get('urls', [])
     if urls:
         lines.append("\n相关链接:\n" + "\n".join(urls))
-    
+
     return '\n'.join(lines)
+
+
+def build_tags(studio: Dict[str, Any]) -> List[str]:
+    """构建 Tags 列表"""
+    tags = studio.get("tags", [])
+    return [tag["name"] for tag in tags if tag.get("name")]
 
 
 def build_provider_ids(studio: Dict[str, Any]) -> Dict[str, str]:
@@ -183,6 +192,11 @@ def build_emby_data(studio: Dict[str, Any], collection_id: str) -> Dict[str, Any
     overview = build_overview(studio)
     if overview:
         emby_data["Overview"] = overview
+
+    # 标签（Tags）- 使用 TagItems 格式（参考 actorSyncEmby）
+    tags = build_tags(studio)
+    if tags:
+        emby_data["TagItems"] = [{"Name": tag, "Id": None} for tag in tags]
 
     if studio.get("rating100"):
         emby_data["CommunityRating"] = studio["rating100"] / 10

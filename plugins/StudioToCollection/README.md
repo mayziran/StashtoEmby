@@ -1,6 +1,6 @@
 # StudioToCollection 插件
 
-**版本：1.2.0**
+**版本：1.3.0**
 
 将 Stash 工作室元数据同步到 Emby 合集（BoxSet）。
 
@@ -11,7 +11,8 @@
 - ✅ 同步评分（CommunityRating）
 - ✅ 同步外部 ID（ProviderIds.Stash + ProviderIds.StashDB）
 - ✅ 同步别名和网址到简介
-- ✅ **同步演员到合集（People 字段）** ⭐ 1.2.0 新增
+- ✅ **同步标签（TagItems）** ⭐ 1.3.0 新增
+- ✅ 同步演员到合集（People 字段）
 - ✅ 支持 Hook 自动响应（Studio.Update.Post / Studio.Create.Post）
 - ✅ 支持 Task 批量同步
 
