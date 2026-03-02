@@ -32,6 +32,10 @@ settings:
     displayName: 启用异步 Worker 日志
     description: "是否将 Create Hook 触发的异步同步脚本日志写入到 studio_sync_worker.log 文件（关闭后日志将完全丢弃，建议有问题时打开查看）"
     type: BOOLEAN
+  parentIds:
+    displayName: 限定媒体库 ID 列表（可选）
+    description: "Task 模式限定的媒体库 ID 列表，多个用逗号分隔，例如：abc123,def456。不填则搜索所有媒体库"
+    type: STRING
 
 exec:
   - python

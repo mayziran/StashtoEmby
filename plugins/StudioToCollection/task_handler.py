@@ -26,28 +26,71 @@ PLUGIN_ID = "StudioToCollection"
 def get_all_collections(
     emby_server: str,
     emby_api_key: str,
-    user_id: str
+    user_id: str,
+    parent_ids: str = ""
 ) -> List[Dict[str, Any]]:
     """
     获取所有合集（Task 专用）
-    
+
     参考 emby_boxset_api.md：
     - 必须添加 Recursive=true 才能获取所有媒体库中的合集
     - 必须添加 StartIndex=0 才能正确分页
-    
+    - 如果指定 parent_ids，则只在指定的媒体库内搜索（支持多个，逗号分隔）
+
     只在 task_handler 中使用，不放在 utils.py 中
     """
+    all_collections = []
+    
     try:
-        url = f"{emby_server}/emby/Users/{user_id}/Items"
-        params = {
-            "api_key": emby_api_key,
-            "IncludeItemTypes": "BoxSet",
-            "Recursive": "true",      # 关键：递归获取所有媒体库
-            "StartIndex": "0",        # 起始索引
-            "Limit": "1000"           # 最多获取 1000 个
-        }
-        response = requests.get(url, params=params, timeout=30)
-        return response.json().get("Items", [])
+        # 解析 parent_ids（支持逗号分隔的多个 ID）
+        if parent_ids:
+            id_list = [id.strip() for id in parent_ids.split(",") if id.strip()]
+        else:
+            id_list = []
+        
+        # 如果指定了多个 parent_ids，分别查询每个媒体库并合并结果
+        if id_list:
+            log.info(f"[{PLUGIN_ID}] 限定在媒体库 ID 列表：{id_list} 内搜索合集")
+            
+            seen_ids = set()  # 用于去重
+            
+            for pid in id_list:
+                try:
+                    url = f"{emby_server}/emby/Users/{user_id}/Items"
+                    params = {
+                        "api_key": emby_api_key,
+                        "IncludeItemTypes": "BoxSet",
+                        "Recursive": "true",
+                        "StartIndex": "0",
+                        "Limit": "2000",  # 每个媒体库最多获取 2000 个
+                        "ParentId": pid  # 每次查询一个媒体库
+                    }
+                    response = requests.get(url, params=params, timeout=30)
+                    items = response.json().get("Items", [])
+                    
+                    # 去重：只添加之前没见过的合集
+                    for item in items:
+                        if item["Id"] not in seen_ids:
+                            all_collections.append(item)
+                            seen_ids.add(item["Id"])
+                    
+                    log.info(f"[{PLUGIN_ID}] 媒体库 {pid}: 获取到 {len(items)} 个合集（去重后累计 {len(all_collections)} 个）")
+                except Exception as e:
+                    log.error(f"[{PLUGIN_ID}] 查询媒体库 {pid} 失败：{e}")
+        else:
+            # 没有限定，查询所有媒体库
+            url = f"{emby_server}/emby/Users/{user_id}/Items"
+            params = {
+                "api_key": emby_api_key,
+                "IncludeItemTypes": "BoxSet",
+                "Recursive": "true",
+                "StartIndex": "0",
+                "Limit": "2000"  # 最多获取 2000 个
+            }
+            response = requests.get(url, params=params, timeout=30)
+            all_collections = response.json().get("Items", [])
+        
+        return all_collections
     except Exception as e:
         log.error(f"获取合集失败：{e}")
         return []
@@ -113,7 +156,12 @@ def handle_task(stash: Any, settings: Dict[str, Any], task_log_func: Any) -> str
 
         # 3. 获取所有合集，建立名称映射
         log.info(f"[{PLUGIN_ID}] 正在获取 Emby 合集列表...")
-        collections = get_all_collections(settings["emby_server"], settings["emby_api_key"], user_id)
+        collections = get_all_collections(
+            settings["emby_server"],
+            settings["emby_api_key"],
+            user_id,
+            settings.get("parent_ids", "")
+        )
         collection_map = {c["Name"].lower(): c["Id"] for c in collections if c.get("Name")}
         log.info(f"[{PLUGIN_ID}] 获取到 {len(collection_map)} 个 Emby 合集")
 

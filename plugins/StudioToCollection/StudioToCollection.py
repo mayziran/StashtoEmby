@@ -79,6 +79,7 @@ def load_settings(stash: StashInterface) -> Dict[str, Any]:
         "worker_delays": _get_val("workerDelays", "35,70"),
         "scheduled_task_id": _get_val("scheduledTaskId", ""),
         "enable_worker_log": bool(_get_val("enableWorkerLog", True)),
+        "parent_ids": _get_val("parentIds", ""),  # 可选：限定媒体库 ID 列表（逗号分隔）
         "stash_api_key": cfg.get("general", {}).get("apiKey") or "",
         "server_connection": {},
     }

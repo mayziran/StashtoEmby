@@ -69,7 +69,7 @@ def find_collection_by_name(
 ) -> Optional[Dict[str, Any]]:
     """
     按名称搜索合集（精确匹配）- worker 内部实现
-    
+
     使用 worker 自己的日志系统，不依赖 utils.py
     """
     try:
@@ -77,15 +77,24 @@ def find_collection_by_name(
         params = {
             "api_key": emby_api_key,
             "IncludeItemTypes": "BoxSet",
+            "Recursive": "true",      # 关键：递归获取所有媒体库
             "SearchTerm": studio_name,
-            "Limit": 10
+            "Limit": 20
         }
         response = requests.get(url, params=params, timeout=30)
         items = response.json().get("Items", [])
 
+        log_info(f"搜索合集 '{studio_name}'，返回 {len(items)} 个结果")
+        
+        # 本地精确匹配（因为 SearchTerm 是模糊搜索）
         for item in items:
-            if item["Name"].lower() == studio_name.lower():
+            item_name = item.get("Name", "")
+            log_info(f"检查合集：{item_name}")
+            if item_name.lower() == studio_name.lower():
+                log_info(f"✓ 找到匹配：{item_name}")
                 return item
+        
+        log_info("✗ 未找到匹配")
         return None
     except Exception as e:
         log_error(f"搜索合集失败：{e}")
