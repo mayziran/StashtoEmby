@@ -16,8 +16,37 @@ namespace Emby.Plugin.StashBox.ExternalIds
         {
             if (!Plugin.Instance?.Configuration?.EnableJAVStash ?? false)
                 return false;
-            // 支持影片、合集、演员
-            return item is Movie || item is BoxSet || item is Person;
+            return item is Movie;
+        }
+    }
+
+    public class JAVStashPersonExternalId : IExternalId, IHasWebsite
+    {
+        public string Name => "JAVStash";
+        public string Key => "javstash";
+        public string UrlFormatString => "https://javstash.org/performers/{0}";
+        public string Website => "https://javstash.org";
+
+        public bool Supports(IHasProviderIds item)
+        {
+            if (!Plugin.Instance?.Configuration?.EnableJAVStash ?? false)
+                return false;
+            return item is Person;
+        }
+    }
+
+    public class JAVStashBoxSetExternalId : IExternalId, IHasWebsite
+    {
+        public string Name => "JAVStash";
+        public string Key => "javstash";
+        public string UrlFormatString => "https://javstash.org/studios/{0}";
+        public string Website => "https://javstash.org";
+
+        public bool Supports(IHasProviderIds item)
+        {
+            if (!Plugin.Instance?.Configuration?.EnableJAVStash ?? false)
+                return false;
+            return item is BoxSet;
         }
     }
 }

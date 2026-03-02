@@ -68,7 +68,7 @@ def build_overview(studio: Dict[str, Any]) -> str:
 def build_provider_ids(studio: Dict[str, Any]) -> Dict[str, str]:
     """
     构建 ProviderIds（支持所有 5 个 Stash-Box 实例 + 源链接）
-    
+
     支持的实例:
         - StashDB
         - ThePornDB
@@ -76,6 +76,8 @@ def build_provider_ids(studio: Dict[str, Any]) -> Dict[str, str]:
         - JAVStash
         - PMVStash
         - scene_source_url (源链接)
+
+    注意：演员和合集只写入 UUID，不需要前缀；只有影片的 NFO 才需要写前缀（如 studios\\xxx）
     """
     provider_ids = {}
 
@@ -133,20 +135,18 @@ def build_provider_ids(studio: Dict[str, Any]) -> Dict[str, str]:
 def build_external_id(studio: Dict[str, Any]) -> Optional[Dict[str, str]]:
     """
     构建 ExternalId（用于 Stash-Box ID 跳转）
-    
+
     返回格式:
         {
-            "stashdb": "studios\\{uuid}",
-            "theporndb": "studios\\{uuid}",
-            "fansdb": "studios\\{uuid}",
+            "stashdb": "{uuid}",
+            "theporndb": "{uuid}",
             ...
         }
-    
-    注意：源链接已移至 ProviderIds.scene_source_url
+
     """
     external_ids = {}
 
-    # 处理所有 stash_ids，写入 studios\{uuid} 格式
+    # 处理所有 stash_ids，只写入 UUID
     if studio.get("stash_ids"):
         for s in studio["stash_ids"]:
             if not isinstance(s, dict):
@@ -161,8 +161,8 @@ def build_external_id(studio: Dict[str, Any]) -> Optional[Dict[str, str]]:
             domain = base_url.replace("https://", "").replace("http://", "")
             identifier = domain.split('.')[0].lower()
 
-            # 写入 studios\{uuid} 格式（反斜杠）
-            external_ids[identifier] = f"studios\\{stash_id}"
+            # 只写入 UUID
+            external_ids[identifier] = stash_id
 
     return external_ids if external_ids else None
 

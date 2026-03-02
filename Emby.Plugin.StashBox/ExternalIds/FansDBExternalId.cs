@@ -16,8 +16,37 @@ namespace Emby.Plugin.StashBox.ExternalIds
         {
             if (!Plugin.Instance?.Configuration?.EnableFansDB ?? false)
                 return false;
-            // 支持影片、合集、演员
-            return item is Movie || item is BoxSet || item is Person;
+            return item is Movie;
+        }
+    }
+
+    public class FansDBPersonExternalId : IExternalId, IHasWebsite
+    {
+        public string Name => "FansDB";
+        public string Key => "fansdb";
+        public string UrlFormatString => "https://fansdb.cc/performers/{0}";
+        public string Website => "https://fansdb.cc";
+
+        public bool Supports(IHasProviderIds item)
+        {
+            if (!Plugin.Instance?.Configuration?.EnableFansDB ?? false)
+                return false;
+            return item is Person;
+        }
+    }
+
+    public class FansDBBoxSetExternalId : IExternalId, IHasWebsite
+    {
+        public string Name => "FansDB";
+        public string Key => "fansdb";
+        public string UrlFormatString => "https://fansdb.cc/studios/{0}";
+        public string Website => "https://fansdb.cc";
+
+        public bool Supports(IHasProviderIds item)
+        {
+            if (!Plugin.Instance?.Configuration?.EnableFansDB ?? false)
+                return false;
+            return item is BoxSet;
         }
     }
 }

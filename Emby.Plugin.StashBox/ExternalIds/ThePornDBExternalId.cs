@@ -16,8 +16,37 @@ namespace Emby.Plugin.StashBox.ExternalIds
         {
             if (!Plugin.Instance?.Configuration?.EnableThePornDB ?? false)
                 return false;
-            // 支持影片、合集、演员
-            return item is Movie || item is BoxSet || item is Person;
+            return item is Movie;
+        }
+    }
+
+    public class ThePornDBPersonExternalId : IExternalId, IHasWebsite
+    {
+        public string Name => "ThePornDB";
+        public string Key => "theporndb";
+        public string UrlFormatString => "https://theporndb.net/performers/{0}";
+        public string Website => "https://theporndb.net";
+
+        public bool Supports(IHasProviderIds item)
+        {
+            if (!Plugin.Instance?.Configuration?.EnableThePornDB ?? false)
+                return false;
+            return item is Person;
+        }
+    }
+
+    public class ThePornDBBoxSetExternalId : IExternalId, IHasWebsite
+    {
+        public string Name => "ThePornDB";
+        public string Key => "theporndb";
+        public string UrlFormatString => "https://theporndb.net/sites/{0}";
+        public string Website => "https://theporndb.net";
+
+        public bool Supports(IHasProviderIds item)
+        {
+            if (!Plugin.Instance?.Configuration?.EnableThePornDB ?? false)
+                return false;
+            return item is BoxSet;
         }
     }
 }

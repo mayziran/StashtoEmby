@@ -16,8 +16,37 @@ namespace Emby.Plugin.StashBox.ExternalIds
         {
             if (!Plugin.Instance?.Configuration?.EnablePMVStash ?? false)
                 return false;
-            // 支持影片、合集、演员
-            return item is Movie || item is BoxSet || item is Person;
+            return item is Movie;
+        }
+    }
+
+    public class PMVStashPersonExternalId : IExternalId, IHasWebsite
+    {
+        public string Name => "PMVStash";
+        public string Key => "pmvstash";
+        public string UrlFormatString => "https://pmvstash.org/performers/{0}";
+        public string Website => "https://pmvstash.org";
+
+        public bool Supports(IHasProviderIds item)
+        {
+            if (!Plugin.Instance?.Configuration?.EnablePMVStash ?? false)
+                return false;
+            return item is Person;
+        }
+    }
+
+    public class PMVStashBoxSetExternalId : IExternalId, IHasWebsite
+    {
+        public string Name => "PMVStash";
+        public string Key => "pmvstash";
+        public string UrlFormatString => "https://pmvstash.org/studios/{0}";
+        public string Website => "https://pmvstash.org";
+
+        public bool Supports(IHasProviderIds item)
+        {
+            if (!Plugin.Instance?.Configuration?.EnablePMVStash ?? false)
+                return false;
+            return item is BoxSet;
         }
     }
 }
