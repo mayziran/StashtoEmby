@@ -9,7 +9,7 @@ Hook 处理器 - 处理工作室创建/更新事件
     5. Update Hook: 直接调用 emby_uploader 上传
 """
 
-from typing import Any, Dict, Callable
+from typing import Any, Dict, Callable, Optional
 
 import requests
 import stashapi.log as log
@@ -94,23 +94,17 @@ def handle_create_hook(
     # 构建 Emby 数据
     emby_data = build_emby_data(studio, collection["Id"])
 
-    # 构建 Stash URL
-    server_conn = settings.get("server_connection", {})
-    scheme = server_conn.get("Scheme", "http")
-    host = server_conn.get("Host", "localhost")
-    port = server_conn.get("Port", "9999")
-    stash_url = f"{scheme}://{host}:{port}"
-
     # 启动 worker（传递原始 studio 数据 + emby_data，worker 负责延迟后调用 emby_uploader 上传）
     start_worker(
         studio_id=studio_id,
         studio_name=studio_name,
-        studio=studio,  # 传递原始工作室数据
-        emby_data=emby_data,  # 传递已构建好的 emby_data
+        studio=studio,
+        emby_data=emby_data,
         collection_id=collection["Id"],
         user_id=user_id,
         settings=settings,
-        stash_url=stash_url
+        server_conn=server_conn,  # 传递 server_conn
+        stash_api_key=settings.get("stash_api_key", "")  # 传递 stash_api_key
     )
 
     return f"工作室 {studio_name} 创建成功，已启动异步同步任务"
@@ -155,15 +149,17 @@ def handle_update_hook(
     # 构建 Emby 数据
     emby_data = build_emby_data(studio, collection["Id"])
 
-    # 直接调用 emby_uploader 上传
+    # 直接调用 emby_uploader 上传（参考 actorSyncEmby）
     if upload_studio_to_emby(
         studio=studio,
         collection_id=collection["Id"],
         emby_server=settings["emby_server"],
         emby_api_key=settings["emby_api_key"],
         emby_data=emby_data,
-        dry_run=settings["dry_run"],
-        stash_url=""
+        user_id=user_id,
+        server_conn=settings.get("server_connection", {}),
+        stash_api_key=settings.get("stash_api_key", ""),
+        dry_run=settings["dry_run"]
     ):
         return f"工作室 {studio_name} 更新成功，已同步到 Emby 合集"
     else:

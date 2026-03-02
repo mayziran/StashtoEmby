@@ -186,8 +186,10 @@ def sync_studio_to_collection(config: Dict[str, Any]) -> str:
             emby_server=config["emby_server"],
             emby_api_key=config["emby_api_key"],
             emby_data=config["emby_data"],
-            dry_run=config.get("dry_run", False),
-            stash_url=config.get("stash_url", "")
+            user_id=user_id,
+            server_conn=config.get("server_conn", {}),  # 传递 server_conn
+            stash_api_key=config.get("stash_api_key", ""),  # 传递 stash_api_key
+            dry_run=config.get("dry_run", False)
         ):
             return f"工作室 {studio_name} 同步完成"
         else:
@@ -217,8 +219,10 @@ def sync_studio_to_collection(config: Dict[str, Any]) -> str:
             emby_server=config["emby_server"],
             emby_api_key=config["emby_api_key"],
             emby_data=config["emby_data"],
-            dry_run=config.get("dry_run", False),
-            stash_url=config.get("stash_url", "")
+            user_id=user_id,
+            server_conn=config.get("server_conn", {}),  # 传递 server_conn
+            stash_api_key=config.get("stash_api_key", ""),  # 传递 stash_api_key
+            dry_run=config.get("dry_run", False)
         ):
             return f"工作室 {studio_name} 同步完成"
         else:
@@ -248,8 +252,10 @@ def sync_studio_to_collection(config: Dict[str, Any]) -> str:
             emby_server=config["emby_server"],
             emby_api_key=config["emby_api_key"],
             emby_data=config["emby_data"],
-            dry_run=config.get("dry_run", False),
-            stash_url=config.get("stash_url", "")
+            user_id=user_id,
+            server_conn=config.get("server_conn", {}),  # 传递 server_conn
+            stash_api_key=config.get("stash_api_key", ""),  # 传递 stash_api_key
+            dry_run=config.get("dry_run", False)
         ):
             return f"工作室 {studio_name} 同步完成"
         else:

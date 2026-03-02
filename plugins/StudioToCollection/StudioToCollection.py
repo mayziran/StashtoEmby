@@ -98,7 +98,8 @@ def start_worker(
     collection_id: str,
     user_id: str,
     settings: Dict[str, Any],
-    stash_url: str
+    server_conn: Dict[str, Any],  # 新增：传递 server_conn
+    stash_api_key: str  # 新增：传递 stash_api_key
 ) -> None:
     """启动 worker 异步执行（Create Hook 专用）"""
     worker_script = os.path.join(os.path.dirname(__file__), "studio_sync_worker.py")
@@ -115,18 +116,19 @@ def start_worker(
     config = {
         "emby_server": settings["emby_server"],
         "emby_api_key": settings["emby_api_key"],
-        "stash_url": stash_url,
         "studio_id": studio_id,
         "studio_name": studio_name,
-        "studio": studio,  # 工作室原始数据
-        "emby_data": emby_data,  # 已构建好的数据
-        "collection_id": collection_id,  # 合集 ID
-        "user_id": user_id,  # Emby 用户 ID（hook 已获取）
+        "studio": studio,
+        "emby_data": emby_data,
+        "collection_id": collection_id,
+        "user_id": user_id,
         "dry_run": settings["dry_run"],
-        "stash_wait": stash_wait,  # 等待 Stash 创建影片时间
-        "emby_wait": emby_wait,  # 等待 Emby 扫描时间
-        "scheduled_task_id": settings.get("scheduled_task_id"),  # 计划任务 ID
-        "enable_worker_log": settings.get("enable_worker_log", True),  # 是否启用 worker 日志
+        "stash_wait": stash_wait,
+        "emby_wait": emby_wait,
+        "scheduled_task_id": settings.get("scheduled_task_id"),
+        "enable_worker_log": settings.get("enable_worker_log", True),
+        "server_conn": server_conn,  # 传递 server_conn
+        "stash_api_key": stash_api_key  # 传递 stash_api_key
     }
 
     config_b64 = base64.b64encode(json.dumps(config, ensure_ascii=False).encode('utf-8')).decode('ascii')

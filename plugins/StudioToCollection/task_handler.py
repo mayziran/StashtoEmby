@@ -31,6 +31,10 @@ def get_all_collections(
     """
     获取所有合集（Task 专用）
     
+    参考 emby_boxset_api.md：
+    - 必须添加 Recursive=true 才能获取所有媒体库中的合集
+    - 必须添加 StartIndex=0 才能正确分页
+    
     只在 task_handler 中使用，不放在 utils.py 中
     """
     try:
@@ -38,7 +42,9 @@ def get_all_collections(
         params = {
             "api_key": emby_api_key,
             "IncludeItemTypes": "BoxSet",
-            "Limit": 1000
+            "Recursive": "true",      # 关键：递归获取所有媒体库
+            "StartIndex": "0",        # 起始索引
+            "Limit": "1000"           # 最多获取 1000 个
         }
         response = requests.get(url, params=params, timeout=30)
         return response.json().get("Items", [])
@@ -130,15 +136,17 @@ def handle_task(stash: Any, settings: Dict[str, Any], task_log_func: Any) -> str
             # 构建 Emby 数据
             emby_data = build_emby_data(studio, collection_id)
 
-            # 调用 emby_uploader 上传
+            # 调用 emby_uploader 上传（参考 actorSyncEmby）
             if upload_studio_to_emby(
                 studio=studio,
                 collection_id=collection_id,
                 emby_server=settings["emby_server"],
                 emby_api_key=settings["emby_api_key"],
                 emby_data=emby_data,
-                dry_run=settings["dry_run"],
-                stash_url=""
+                user_id=user_id,
+                server_conn=settings.get("server_connection", {}),
+                stash_api_key=settings.get("stash_api_key", ""),
+                dry_run=settings["dry_run"]
             ):
                 success_list.append(studio_name)
                 log.info(f"[{PLUGIN_ID}] ✓ {studio_name}")
