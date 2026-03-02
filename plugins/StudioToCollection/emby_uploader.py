@@ -184,49 +184,10 @@ def _upload_image_to_emby(
             f"{response.status_code} - {response.text[:500] if response.text else ''}"
         )
         return False
-    
+
     except Exception as e:
         log.error(f"[{PLUGIN_ID}] 上传{image_type}图片失败：{e}")
         return False
-
-
-def upload_image(
-    collection_id: str,
-    image_bytes: bytes,
-    image_type: str,
-    emby_server: str,
-    emby_api_key: str,
-    content_type: str = "image/jpeg",
-    dry_run: bool = False
-) -> bool:
-    """
-    上传图片到 Emby（对外接口）
-    
-    参考 actorSyncEmby 插件：
-    - Base64 编码图片数据
-    - POST /emby/Items/{id}/Images/{type}?api_key=xxx
-    
-    Args:
-        collection_id: Emby 合集 ID
-        image_bytes: 图片二进制数据
-        image_type: 图片类型（Primary 或 Logo）
-        emby_server: Emby 服务器地址
-        emby_api_key: Emby API 密钥
-        content_type: 图片 Content-Type（从 Stash 响应头获取）
-        dry_run: 是否仅模拟
-    
-    Returns:
-        上传是否成功
-    """
-    return _upload_image_to_emby(
-        emby_server=emby_server,
-        emby_api_key=emby_api_key,
-        collection_id=collection_id,
-        image_type=image_type,
-        image_data=image_bytes,
-        content_type=content_type,
-        dry_run=dry_run
-    )
 
 
 # =============================================================================
