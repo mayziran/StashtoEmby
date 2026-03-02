@@ -1,5 +1,7 @@
 # StudioToCollection 插件
 
+**版本：1.1.0**
+
 将 Stash 工作室元数据同步到 Emby 合集（BoxSet）。
 
 ## 功能
@@ -201,6 +203,11 @@ StashtoEmby/plugins/StudioToCollection/studio_sync_worker.log
 5. 复制想要触发的任务 ID（如 Jellyfin.Plugin.Stash 的刷新任务）
 
 ## 版本历史
+
+- **1.1.0** - 优化数据传递
+  - 删除冗余的 `studio` 参数传递，`emby_uploader` 只依赖转换后的 `emby_data`
+  - `build_emby_data()` 添加 `_image_path` 字段，统一数据出口
+  - 减少内存占用，优化代码结构
 
 - **1.0.0** - 初始版本
   - 同步工作室元数据到 Emby 合集
