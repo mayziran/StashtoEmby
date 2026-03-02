@@ -31,7 +31,7 @@ def find_collection_by_name(
 ) -> Optional[Dict[str, Any]]:
     """
     按名称搜索合集（精确匹配）
-    
+
     只在 hook_handler 中使用，不放在 utils.py 中
     """
     try:
@@ -39,15 +39,21 @@ def find_collection_by_name(
         params = {
             "api_key": emby_api_key,
             "IncludeItemTypes": "BoxSet",
+            "Recursive": "true",
             "SearchTerm": studio_name,
-            "Limit": 10
+            "Limit": "20"
         }
         response = requests.get(url, params=params, timeout=30)
         items = response.json().get("Items", [])
 
+        # 本地精确匹配（因为 SearchTerm 是模糊搜索）
         for item in items:
-            if item["Name"].lower() == studio_name.lower():
+            item_name = item.get("Name", "")
+            if item_name.lower() == studio_name.lower():
+                log.info(f"[{PLUGIN_ID}] ✓ 找到合集：{item_name}")
                 return item
+
+        log.info(f"[{PLUGIN_ID}] ✗ 未找到合集：{studio_name}")
         return None
     except Exception as e:
         log.error(f"搜索合集失败：{e}")
@@ -72,15 +78,18 @@ def handle_create_hook(
     # 获取工作室数据
     studio = stash.find_studio(studio_id, fragment=STUDIO_FRAGMENT_FOR_API)
     if not studio:
+        log.error(f"[{PLUGIN_ID}] [Create] 找不到工作室 ID: {studio_id}")
         return f"找不到工作室 ID: {studio_id}"
 
     studio_name = studio.get("name", "Unknown")
 
-    # 搜索合集
+    # 获取 Emby 用户 ID
     user_id = get_emby_user_id(settings["emby_server"], settings["emby_api_key"])
     if not user_id:
+        log.error(f"[{PLUGIN_ID}] [Create] 无法获取 Emby 用户 ID: {studio_name}")
         return f"无法获取 Emby 用户 ID: {studio_name}"
 
+    # 搜索合集
     collection = find_collection_by_name(
         settings["emby_server"],
         settings["emby_api_key"],
@@ -89,12 +98,14 @@ def handle_create_hook(
     )
 
     if not collection:
+        log.error(f"[{PLUGIN_ID}] [Create] 未找到合集：{studio_name}")
         return f"未找到合集：{studio_name}，跳过同步"
 
     # 构建 Emby 数据
     emby_data = build_emby_data(studio, collection["Id"])
 
-    # 启动 worker（传递原始 studio 数据 + emby_data，worker 负责延迟后调用 emby_uploader 上传）
+    # 启动 worker 异步执行
+    log.info(f"[{PLUGIN_ID}] [Create] 启动 Worker: {studio_name}")
     start_worker(
         studio_id=studio_id,
         studio_name=studio_name,
@@ -103,8 +114,8 @@ def handle_create_hook(
         collection_id=collection["Id"],
         user_id=user_id,
         settings=settings,
-        server_conn=server_conn,  # 传递 server_conn
-        stash_api_key=settings.get("stash_api_key", "")  # 传递 stash_api_key
+        server_conn=settings.get("server_connection", {}),
+        stash_api_key=settings.get("stash_api_key", "")
     )
 
     return f"工作室 {studio_name} 创建成功，已启动异步同步任务"
@@ -127,15 +138,18 @@ def handle_update_hook(
     # 获取工作室数据
     studio = stash.find_studio(studio_id, fragment=STUDIO_FRAGMENT_FOR_API)
     if not studio:
+        log.error(f"[{PLUGIN_ID}] [Update] 找不到工作室 ID: {studio_id}")
         return f"找不到工作室 ID: {studio_id}"
 
     studio_name = studio.get("name", "Unknown")
 
-    # 搜索合集
+    # 获取 Emby 用户 ID
     user_id = get_emby_user_id(settings["emby_server"], settings["emby_api_key"])
     if not user_id:
+        log.error(f"[{PLUGIN_ID}] [Update] 无法获取 Emby 用户 ID: {studio_name}")
         return f"无法获取 Emby 用户 ID: {studio_name}"
 
+    # 搜索合集
     collection = find_collection_by_name(
         settings["emby_server"],
         settings["emby_api_key"],
@@ -144,12 +158,14 @@ def handle_update_hook(
     )
 
     if not collection:
+        log.error(f"[{PLUGIN_ID}] [Update] 未找到合集：{studio_name}")
         return f"未找到合集：{studio_name}，跳过同步"
 
     # 构建 Emby 数据
     emby_data = build_emby_data(studio, collection["Id"])
 
-    # 直接调用 emby_uploader 上传（参考 actorSyncEmby）
+    # 上传到 Emby
+    log.info(f"[{PLUGIN_ID}] [Update] 同步到 Emby: {studio_name}")
     if upload_studio_to_emby(
         emby_data=emby_data,
         collection_id=collection["Id"],
