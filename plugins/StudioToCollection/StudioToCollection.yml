@@ -1,6 +1,6 @@
 name: StudioToCollection
 description: "将 Stash 工作室元数据同步到 Emby 合集（与 Jellyfin.Plugin.Stash 配合使用）"
-version: "1.1.0"
+version: "1.2.0"
 url: https://github.com/mayziran/StashtoEmby/tree/master/plugins/StudioToCollection
 
 settings:
@@ -46,6 +46,10 @@ errLog: info
 tasks:
   - name: 同步所有工作室
     description: "手动执行：同步所有工作室元数据到 Emby 合集"
+    defaultArgs: {}
+
+  - name: 同步工作室演员到合集
+    description: "手动执行：将所有工作室关联的演员同步到 Emby 合集（People 字段）"
     defaultArgs: {}
 
 hooks:

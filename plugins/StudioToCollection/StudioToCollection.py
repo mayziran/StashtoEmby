@@ -157,10 +157,6 @@ def main():
     settings = load_settings(stash)
     settings["server_connection"] = server_conn
 
-    # 导入处理器
-    from hook_handler import handle_create_hook, handle_update_hook
-    from task_handler import handle_task
-
     args = json_input.get("args") or {}
     hook_ctx = args.get("hookContext")
 
@@ -183,8 +179,19 @@ def main():
                 msg = f"未知 Hook 类型：{hook_type}"
         else:
             # ========== Task 模式 ==========
-            log.info(f"[{PLUGIN_ID}] Task 模式")
-            msg = handle_task(stash, settings, task_log)
+            # 获取任务名称，判断执行哪个 Task
+            task_name = args.get("task_name", "") if args else ""
+            
+            if task_name == "同步工作室演员到合集":
+                # 执行演员同步 Task
+                log.info(f"[{PLUGIN_ID}] 演员同步 Task 模式")
+                from studios_performer_sync import handle_task as handle_performer_task
+                msg = handle_performer_task(stash, settings, task_log)
+            else:
+                # 执行主 Task（同步所有工作室）
+                log.info(f"[{PLUGIN_ID}] Task 模式")
+                from task_handler import handle_task
+                msg = handle_task(stash, settings, task_log)
 
         print(json.dumps({"output": msg, "progress": 1.0}) + "\n")
     except Exception as e:
