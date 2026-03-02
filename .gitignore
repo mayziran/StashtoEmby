@@ -35,3 +35,6 @@ logs/
 # OS generated files
 .DS_Store
 Thumbs.db
+
+# Issue documentation (development reference only)
+issue_docs/
