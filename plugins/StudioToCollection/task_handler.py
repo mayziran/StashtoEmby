@@ -35,73 +35,82 @@ def handle_task(stash: Any, settings: Dict[str, Any], task_log_func: Any) -> str
     Returns:
         处理结果消息
     """
-    log.info(f"[{PLUGIN_ID}] Task 模式启动")
-    task_log_func("开始同步工作室", progress=0.0)
-
-    # 1. 获取所有工作室
     try:
-        all_studios = stash.all_studios(fragment=STUDIO_FRAGMENT_FOR_API)
-        total_count = len(all_studios)
-        log.info(f"[{PLUGIN_ID}] 获取到 {total_count} 个工作室")
-    except Exception as e:
-        return f"获取工作室失败：{e}"
+        log.info(f"[{PLUGIN_ID}] Task 模式启动")
+        task_log_func("开始同步工作室", progress=0.0)
 
-    if total_count == 0:
-        msg = "没有工作室需要同步"
+        # 1. 获取所有工作室
+        try:
+            all_studios = stash.all_studios(fragment=STUDIO_FRAGMENT_FOR_API)
+            total_count = len(all_studios)
+            log.info(f"[{PLUGIN_ID}] 获取到 {total_count} 个工作室")
+        except Exception as e:
+            log.error(f"[{PLUGIN_ID}] 获取工作室失败：{e}")
+            return f"获取工作室失败：{e}"
+
+        if total_count == 0:
+            msg = "没有工作室需要同步"
+            task_log_func(msg, progress=1.0)
+            return msg
+
+        # 2. 获取 Emby 用户 ID
+        log.info(f"[{PLUGIN_ID}] 正在获取 Emby 用户 ID...")
+        user_id = get_emby_user_id(settings["emby_server"], settings["emby_api_key"])
+        if not user_id:
+            log.error(f"[{PLUGIN_ID}] 无法获取 Emby 用户 ID")
+            return "无法获取 Emby 用户 ID"
+        log.info(f"[{PLUGIN_ID}] 获取到 Emby 用户 ID: {user_id}")
+
+        # 3. 获取所有合集，建立名称映射
+        log.info(f"[{PLUGIN_ID}] 正在获取 Emby 合集列表...")
+        collections = get_all_collections(settings["emby_server"], settings["emby_api_key"], user_id)
+        collection_map = {c["Name"].lower(): c["Id"] for c in collections if c.get("Name")}
+        log.info(f"[{PLUGIN_ID}] 获取到 {len(collection_map)} 个 Emby 合集")
+
+        # 4. 统计
+        success_list = []
+        skip_count = 0
+        error_count = 0
+
+        # 5. 遍历工作室
+        for i, studio in enumerate(all_studios):
+            studio_name = studio.get("name", "")
+            progress = (i + 1) / total_count
+
+            # 名称精确匹配
+            collection_id = collection_map.get(studio_name.lower())
+            if not collection_id:
+                skip_count += 1
+                continue
+
+            # 构建 Emby 数据
+            emby_data = build_emby_data(studio, collection_id)
+
+            # 调用 emby_uploader 上传
+            if upload_studio_to_emby(
+                studio=studio,
+                collection_id=collection_id,
+                emby_server=settings["emby_server"],
+                emby_api_key=settings["emby_api_key"],
+                emby_data=emby_data,
+                dry_run=settings["dry_run"],
+                stash_url=""
+            ):
+                success_list.append(studio_name)
+                log.info(f"[{PLUGIN_ID}] ✓ {studio_name}")
+            else:
+                error_count += 1
+                log.error(f"[{PLUGIN_ID}] ✗ {studio_name} - 同步失败")
+
+        # 6. 输出统计
+        success_count = len(success_list)
+        msg = f"完成：成功 {success_count} 个，跳过 {skip_count} 个，失败 {error_count} 个"
+
+        if success_list:
+            msg += "\n\n成功列表:\n" + "\n".join(success_list)
+
         task_log_func(msg, progress=1.0)
         return msg
-
-    # 2. 获取 Emby 用户 ID
-    user_id = get_emby_user_id(settings["emby_server"], settings["emby_api_key"])
-    if not user_id:
-        return "无法获取 Emby 用户 ID"
-
-    # 3. 获取所有合集，建立名称映射
-    collections = get_all_collections(settings["emby_server"], settings["emby_api_key"], user_id)
-    collection_map = {c["Name"].lower(): c["Id"] for c in collections if c.get("Name")}
-    log.info(f"[{PLUGIN_ID}] 获取到 {len(collection_map)} 个 Emby 合集")
-
-    # 4. 统计
-    success_list = []
-    skip_count = 0
-    error_count = 0
-
-    # 5. 遍历工作室
-    for i, studio in enumerate(all_studios):
-        studio_name = studio.get("name", "")
-        progress = (i + 1) / total_count
-
-        # 名称精确匹配
-        collection_id = collection_map.get(studio_name.lower())
-        if not collection_id:
-            skip_count += 1
-            continue
-
-        # 构建 Emby 数据
-        emby_data = build_emby_data(studio, collection_id)
-
-        # 调用 emby_uploader 上传
-        if upload_studio_to_emby(
-            studio=studio,
-            collection_id=collection_id,
-            emby_server=settings["emby_server"],
-            emby_api_key=settings["emby_api_key"],
-            emby_data=emby_data,
-            dry_run=settings["dry_run"],
-            stash_url=""
-        ):
-            success_list.append(studio_name)
-            log.info(f"[{PLUGIN_ID}] ✓ {studio_name}")
-        else:
-            error_count += 1
-            log.error(f"[{PLUGIN_ID}] ✗ {studio_name} - 同步失败")
-
-    # 6. 输出统计
-    success_count = len(success_list)
-    msg = f"完成：成功 {success_count} 个，跳过 {skip_count} 个，失败 {error_count} 个"
-
-    if success_list:
-        msg += "\n\n成功列表:\n" + "\n".join(success_list)
-
-    task_log_func(msg, progress=1.0)
-    return msg
+    except Exception as e:
+        log.error(f"[{PLUGIN_ID}] Task 执行异常：{e}")
+        raise
