@@ -150,9 +150,10 @@ def get_performers_by_studio(
     """
     try:
         # 查询所有关联了该工作室的演员
+        # 使用 f 参数作为过滤器（stash-python 库的正确用法）
         performers = stash.find_performers(
-            performer_filter={
-                "studios": {"value": str(studio_id), "modifier": "INCLUDES"}
+            f={
+                "studios": {"value": [str(studio_id)], "modifier": "INCLUDES"}
             },
             fragment=PERFORMER_FRAGMENT
         )
