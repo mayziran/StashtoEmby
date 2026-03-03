@@ -24,21 +24,15 @@ PLUGIN_ID = "StudioToCollection"
 # =============================================================================
 
 def build_absolute_url(url: str, server_conn: Dict[str, Any]) -> str:
-    """
-    基于 server_conn 构建绝对 URL（参考 actorSyncEmby）
-    
-    注意：即使 url 已经是完整 URL，也会用 server_conn 中的端口重新构建
-    这是为了解决 Stash 返回的 image_path 可能包含错误端口的问题
-    """
+    """构建绝对 URL（参考 actorSyncEmby）"""
     if not url:
         return url
     
-    # 提取路径部分（去掉协议和主机）
-    path = url
-    if "://" in url:
-        path = "/" + url.split("://", 1)[1].split("/", 1)[1] if "/" in url.split("://", 1)[1] else ""
+    # 如果已经是完整 URL，直接返回
+    if url.startswith("http://") or url.startswith("https://"):
+        return url
     
-    # 使用 server_conn 构建新的 URL
+    # 构建基础 URL
     scheme = server_conn.get("Scheme", "http")
     host = server_conn.get("Host", "localhost")
     port = server_conn.get("Port")
@@ -47,10 +41,11 @@ def build_absolute_url(url: str, server_conn: Dict[str, Any]) -> str:
     if port:
         base = f"{base}:{port}"
     
-    if not path.startswith("/"):
-        path = "/" + path
+    # 确保路径以 / 开头
+    if not url.startswith("/"):
+        url = "/" + url
     
-    return base + path
+    return base + url
 
 
 def build_requests_session(server_conn: Dict[str, Any], stash_api_key: str = "") -> requests.Session:
@@ -329,28 +324,31 @@ def upload_studio_to_emby(
         # 下载图片，获取图片数据和 Content-Type（参考 actorSyncEmby）
         image_bytes, content_type = download_image(image_url, server_conn, stash_api_key)
 
-        if image_bytes:
-            # 使用从 Stash 获取的 Content-Type 上传图片（参考 actorSyncEmby）
-            _upload_image_to_emby(
-                emby_server=emby_server,
-                emby_api_key=emby_api_key,
-                collection_id=collection_id,
-                image_type="Primary",
-                image_data=image_bytes,
-                content_type=content_type,
-                dry_run=dry_run
-            )
-
-            _upload_image_to_emby(
-                emby_server=emby_server,
-                emby_api_key=emby_api_key,
-                collection_id=collection_id,
-                image_type="Logo",
-                image_data=image_bytes,
-                content_type=content_type,
-                dry_run=dry_run
-            )
-        else:
+        if not image_bytes:
             log.error(f"[{PLUGIN_ID}] 下载图片失败：{image_url}")
+            return False
+
+        # 使用从 Stash 获取的 Content-Type 上传图片（参考 actorSyncEmby）
+        if not _upload_image_to_emby(
+            emby_server=emby_server,
+            emby_api_key=emby_api_key,
+            collection_id=collection_id,
+            image_type="Primary",
+            image_data=image_bytes,
+            content_type=content_type,
+            dry_run=dry_run
+        ):
+            return False
+
+        if not _upload_image_to_emby(
+            emby_server=emby_server,
+            emby_api_key=emby_api_key,
+            collection_id=collection_id,
+            image_type="Logo",
+            image_data=image_bytes,
+            content_type=content_type,
+            dry_run=dry_run
+        ):
+            return False
 
     return True
