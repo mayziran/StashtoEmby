@@ -236,18 +236,26 @@ def upload_metadata(
         
         # 获取现有数据
         existing_data = get_response.json()
-        
-        # 第 2 步：在现有数据基础上更新（参考 actorSyncEmby）
-        # 保留原有数据，只更新需要的字段
-        update_data = existing_data.copy()
-        update_data.update(emby_data)  # 用新数据覆盖
-        update_data["Id"] = collection_id  # 确保 ID 正确
-        
+
+        # 第 2 步：在现有数据基础上，直接覆盖所有我们有能力写入的字段
+        existing_data["Overview"] = emby_data.get("Overview", "")
+        existing_data["TagItems"] = emby_data.get("TagItems", [])
+        existing_data["CommunityRating"] = emby_data.get("CommunityRating")
+
+        # 只更新 ProviderIds 中的 Stash 相关字段，不覆盖整个 ProviderIds
+        # 这样保留原有的 themoviedb、tvdb、imdb 等其他提供者 ID
+        if "ProviderIds" not in existing_data:
+            existing_data["ProviderIds"] = {}
+
+        provider_ids_to_update = emby_data.get("ProviderIds", {})
+        for key, value in provider_ids_to_update.items():
+            existing_data["ProviderIds"][key] = value
+
         # 第 3 步：POST 完整数据回去（参考 actorSyncEmby）
         update_url = f"{emby_server}/emby/Items/{collection_id}?api_key={emby_api_key}"
         response = requests.post(
             update_url,
-            json=update_data,
+            json=existing_data,
             headers={"Content-Type": "application/json"},
             timeout=30
         )

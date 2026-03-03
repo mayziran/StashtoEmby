@@ -37,6 +37,10 @@ PERFORMER_FRAGMENT_FOR_API = """    id
     tags {
         id
         name
+    }
+    stash_ids {
+        stash_id
+        endpoint
     }"""
 
 

@@ -270,12 +270,39 @@ def update_actor_metadata_in_emby(performer: Dict[str, Any], actor_id: str, emby
     if tag_items:
         person_data['TagItems'] = tag_items
 
-    # 添加 Stash ID 作为外部标识符
+    # 添加 Stash ID 作为外部标识符（支持多个 Stash-Box 站点 + 源链接）
+    # 参考 StudioToCollection 的 build_provider_ids()
+    if 'ProviderIds' not in person_data:
+        person_data['ProviderIds'] = {}
+
+    # 本地 Stash ID
     stash_id = performer.get("id")
     if stash_id:
-        if 'ProviderIds' not in person_data:
-            person_data['ProviderIds'] = {}
-        person_data['ProviderIds']['Stash'] = str(stash_id)
+        person_data['ProviderIds']['stash'] = str(stash_id)
+
+    # 处理所有 stash_ids，一个站点一个 UUID
+    if performer.get("stash_ids"):
+        for s in performer["stash_ids"]:
+            if not isinstance(s, dict):
+                continue
+            endpoint = s.get("endpoint", "")
+            stash_id = s.get("stash_id", "")
+            if not endpoint or not stash_id:
+                continue
+
+            # 从 endpoint 提取标识符
+            base_url = endpoint.replace("/graphql", "")
+            domain = base_url.replace("https://", "").replace("http://", "")
+            identifier = domain.split('.')[0].lower()
+
+            # 直接写入 UUID（一个站点一个 UUID）
+            person_data['ProviderIds'][identifier] = stash_id
+
+    # 源链接：写入 scene_source_url（去掉协议前缀，反斜杠替代正斜杠）
+    urls = performer.get("urls", [])
+    if urls:
+        url_without_scheme = urls[0].replace("https://", "").replace("http://", "")
+        person_data['ProviderIds']['scene_source_url'] = url_without_scheme.replace('/', '\\')
 
     # 使用 POST 方法更新到 Items 端点
     update_url = f"{emby_server}/emby/Items/{found_actor_id}?api_key={emby_api_key}"
