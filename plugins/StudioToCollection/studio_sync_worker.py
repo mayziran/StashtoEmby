@@ -168,104 +168,48 @@ def sync_studio_to_collection(config: Dict[str, Any]) -> str:
     log_info(f"[{studio_name}] 等待 {emby_wait} 秒，等待 Emby 扫描完成...")
     time.sleep(emby_wait)
 
-    # ========== 触发计划任务（第 1 次） ==========
-    if task_id:
-        log_info(f"[{studio_name}] 触发 Emby 计划任务（第 1 次）...")
-        trigger_emby_scheduled_task(config["emby_server"], config["emby_api_key"], task_id)
+    # ========== 重试配置：3 次搜索，每次等待时间不同 ==========
+    retry_delays = [30, 60, 90]  # 第 1/2/3 次搜索前的等待时间
+    
+    for attempt, delay in enumerate(retry_delays, 1):
+        # 触发计划任务
+        if task_id:
+            log_info(f"[{studio_name}] 触发 Emby 计划任务（第 {attempt} 次）...")
+            trigger_emby_scheduled_task(config["emby_server"], config["emby_api_key"], task_id)
 
-    # ========== 等待任务执行 ==========
-    log_info(f"[{studio_name}] 等待 30 秒，等待计划任务执行...")
-    time.sleep(30)
+        # 等待任务执行
+        log_info(f"[{studio_name}] 等待 30 秒，等待计划任务执行...")
+        time.sleep(30)
 
-    # ========== 第 1 次搜索 ==========
-    log_info(f"[{studio_name}] 第 1 次搜索合集...")
+        # 搜索合集
+        log_info(f"[{studio_name}] 第 {attempt} 次搜索合集...")
+        collection = find_collection_by_name(
+            config["emby_server"],
+            config["emby_api_key"],
+            user_id,
+            studio_name
+        )
 
-    collection = find_collection_by_name(
-        config["emby_server"],
-        config["emby_api_key"],
-        user_id,
-        studio_name
-    )
-
-    if collection:
-        log_info(f"[{studio_name}] ✓ 找到合集，开始上传...")
-        if upload_studio_to_emby(
-            emby_data=config["emby_data"],
-            collection_id=collection["Id"],
-            emby_server=config["emby_server"],
-            emby_api_key=config["emby_api_key"],
-            user_id=user_id,
-            server_conn=config.get("server_conn", {}),
-            stash_api_key=config.get("stash_api_key", ""),
-            dry_run=config.get("dry_run", False)
-        ):
-            return f"工作室 {studio_name} 同步完成"
-        else:
-            return f"工作室 {studio_name} 上传失败"
-
-    # ========== 第 2 次搜索 ==========
-    log_info(f"[{studio_name}] 未找到合集，等待 60 秒...")
-    time.sleep(60)
-
-    if task_id:
-        log_info(f"[{studio_name}] 触发 Emby 计划任务（第 2 次）...")
-        trigger_emby_scheduled_task(config["emby_server"], config["emby_api_key"], task_id)
-
-    log_info(f"[{studio_name}] 第 2 次搜索合集...")
-    collection = find_collection_by_name(
-        config["emby_server"],
-        config["emby_api_key"],
-        user_id,
-        studio_name
-    )
-
-    if collection:
-        log_info(f"[{studio_name}] ✓ 找到合集，开始上传...")
-        if upload_studio_to_emby(
-            emby_data=config["emby_data"],
-            collection_id=collection["Id"],
-            emby_server=config["emby_server"],
-            emby_api_key=config["emby_api_key"],
-            user_id=user_id,
-            server_conn=config.get("server_conn", {}),
-            stash_api_key=config.get("stash_api_key", ""),
-            dry_run=config.get("dry_run", False)
-        ):
-            return f"工作室 {studio_name} 同步完成"
-        else:
-            return f"工作室 {studio_name} 上传失败"
-
-    # ========== 第 3 次搜索 ==========
-    log_info(f"[{studio_name}] 未找到合集，等待 90 秒...")
-    time.sleep(90)
-
-    if task_id:
-        log_info(f"[{studio_name}] 触发 Emby 计划任务（第 3 次）...")
-        trigger_emby_scheduled_task(config["emby_server"], config["emby_api_key"], task_id)
-
-    log_info(f"[{studio_name}] 第 3 次搜索合集...")
-    collection = find_collection_by_name(
-        config["emby_server"],
-        config["emby_api_key"],
-        user_id,
-        studio_name
-    )
-
-    if collection:
-        log_info(f"[{studio_name}] ✓ 找到合集，开始上传...")
-        if upload_studio_to_emby(
-            emby_data=config["emby_data"],
-            collection_id=collection["Id"],
-            emby_server=config["emby_server"],
-            emby_api_key=config["emby_api_key"],
-            user_id=user_id,
-            server_conn=config.get("server_conn", {}),
-            stash_api_key=config.get("stash_api_key", ""),
-            dry_run=config.get("dry_run", False)
-        ):
-            return f"工作室 {studio_name} 同步完成"
-        else:
-            return f"工作室 {studio_name} 上传失败"
+        if collection:
+            log_info(f"[{studio_name}] ✓ 找到合集，开始上传...")
+            if upload_studio_to_emby(
+                emby_data=config["emby_data"],
+                collection_id=collection["Id"],
+                emby_server=config["emby_server"],
+                emby_api_key=config["emby_api_key"],
+                user_id=user_id,
+                server_conn=config.get("server_conn", {}),
+                stash_api_key=config.get("stash_api_key", ""),
+                dry_run=config.get("dry_run", False)
+            ):
+                return f"工作室 {studio_name} 同步完成"
+            else:
+                return f"工作室 {studio_name} 上传失败"
+        
+        # 未找到，等待下一次重试（最后一次不等待）
+        if attempt < len(retry_delays):
+            log_info(f"[{studio_name}] 未找到合集，等待 {delay} 秒...")
+            time.sleep(delay)
 
     # ========== 放弃 ==========
     log_info(f"[{studio_name}] ✗ 三次尝试后仍未找到合集，放弃")
