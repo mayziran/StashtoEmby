@@ -28,7 +28,10 @@ def write_actor_nfo(actor_dir: str, performer: Dict[str, Any]) -> Optional[str]:
     Returns:
         NFO 文件路径，如果未导出则返回 None
     """
-    name = performer.get("name")
+    from utils import build_performer_name
+
+    # 构建完整姓名（包含消歧义）
+    name = build_performer_name(performer)
     if not name:
         log.warning("演员没有名称，无法生成 NFO")
         return None
@@ -52,7 +55,7 @@ def write_actor_nfo(actor_dir: str, performer: Dict[str, Any]) -> Optional[str]:
     _set("height_cm", performer.get("height_cm"))
     _set("measurements", performer.get("measurements"))
     _set("fake_tits", performer.get("fake_tits"))
-    _set("disambiguation", performer.get("disambiguation"))
+    # 消歧义已包含在 name 中，不再单独写入
 
     # 扩展信息
     _set("ethnicity", performer.get("ethnicity"))
@@ -113,12 +116,15 @@ def download_actor_image(actor_dir: str, performer: Dict[str, Any],
     Returns:
         图片文件路径，如果未下载则返回 None
     """
+    from utils import build_performer_name
+
     image_url = performer.get("image_path")
     if not image_url:
         log.info("演员没有图片 URL，跳过下载")
         return None
 
-    name = performer.get("name")
+    # 构建完整姓名（包含消歧义）
+    name = build_performer_name(performer)
     dst_path = os.path.join(actor_dir, "folder.jpg")
     abs_url = build_absolute_url(image_url, server_conn)
     session = build_requests_session(server_conn, stash_api_key)
@@ -165,7 +171,9 @@ def export_actor_to_local(
     """
     result = {"nfo": None, "image": None}
 
-    name = performer.get("name")
+    # 构建完整姓名（包含消歧义）
+    from utils import build_performer_name
+    name = build_performer_name(performer)
     if not name:
         log.warning("演员没有名称，跳过导出")
         return result

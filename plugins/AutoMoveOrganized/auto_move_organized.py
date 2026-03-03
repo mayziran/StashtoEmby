@@ -574,8 +574,8 @@ def build_target_path(
       {studio_id}
       {code}
       {director}
-      {performers}
-      {first_performer}
+      {performers}            -> 演员列表（用 - 连接）
+      {first_performer}       -> 第一个演员
       {performer_count}
       {tag_names} / {tags}
       {group_name}
@@ -1668,7 +1668,11 @@ def write_nfo_for_scene(video_path: str, scene: Dict[str, Any], settings: Dict[s
     for p in performers:
         if not isinstance(p, dict):
             continue
-        name = p.get("name")
+        # 构建完整姓名（包含消歧义）
+        name = p.get("name", "")
+        disambiguation = p.get("disambiguation", "")
+        if name and disambiguation:
+            name = f"{name} ({disambiguation})"
         if not name:
             continue
         actor_el = ET.SubElement(root, "actor")

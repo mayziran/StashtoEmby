@@ -200,8 +200,12 @@ def main():
     performer = get_performer_from_stash(stash_url, stash_api_key, performer_id)
     if not performer:
         sys.exit(1)
-    
+
+    # 构建完整姓名（包含消歧义）
     actor_name = performer.get("name", "")
+    disambiguation = performer.get("disambiguation", "")
+    if actor_name and disambiguation:
+        actor_name = f"{actor_name} ({disambiguation})"
     log_info(f"获取到演员信息：{actor_name}")
 
     # 阶段 1: 等待

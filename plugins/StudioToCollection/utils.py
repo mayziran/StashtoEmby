@@ -78,7 +78,7 @@ def build_provider_ids(studio: Dict[str, Any]) -> Dict[str, str]:
     """
     构建 ProviderIds（所有 Stash-Box 站点 ID + 本地 ID + 源链接）
 
-    返回格式:
+    返回格式（固定 7 个字段，无论是否为空都写入）:
         {
             "stash": "{本地 Stash ID}",
             "stashdb": "{UUID}",
@@ -91,7 +91,16 @@ def build_provider_ids(studio: Dict[str, Any]) -> Dict[str, str]:
 
     注意：演员和合集只写入 UUID，不需要前缀；一个站点一个 UUID
     """
-    provider_ids = {}
+    # 初始化 7 个字段为空字符串
+    provider_ids = {
+        "stash": "",
+        "stashdb": "",
+        "theporndb": "",
+        "fansdb": "",
+        "javstash": "",
+        "pmvstash": "",
+        "scene_source_url": ""
+    }
 
     # 本地 Stash ID
     if studio.get("id"):
@@ -113,9 +122,10 @@ def build_provider_ids(studio: Dict[str, Any]) -> Dict[str, str]:
             identifier = domain.split('.')[0].lower()
 
             # 直接写入 UUID（一个站点一个 UUID）
-            provider_ids[identifier] = stash_id
+            if identifier in provider_ids:
+                provider_ids[identifier] = stash_id
 
-    # 源链接：写入 scene_source_url（去掉协议前缀，反斜杠替代正斜杠）
+    # 源链接
     urls = studio.get("urls", [])
     if urls:
         url_without_scheme = urls[0].replace("https://", "").replace("http://", "")
@@ -137,22 +147,20 @@ def build_emby_data(studio: Dict[str, Any], collection_id: str) -> Dict[str, Any
     """
     emby_data = {"Id": collection_id}
 
+    # 概述（Overview）- 无论是否为空都写入
     overview = build_overview(studio)
-    if overview:
-        emby_data["Overview"] = overview
+    emby_data["Overview"] = overview if overview else ""
 
-    # 标签（Tags）- 使用 TagItems 格式（参考 actorSyncEmby）
+    # 标签（TagItems）- 无论是否为空都写入
     tags = build_tags(studio)
-    if tags:
-        emby_data["TagItems"] = [{"Name": tag, "Id": None} for tag in tags]
+    emby_data["TagItems"] = [{"Name": tag, "Id": None} for tag in tags] if tags else []
 
-    if studio.get("rating100"):
-        emby_data["CommunityRating"] = studio["rating100"] / 10
+    # 评分（CommunityRating）- 无论是否为空都写入
+    emby_data["CommunityRating"] = studio["rating100"] / 10 if studio.get("rating100") else None
 
-    # ProviderIds（所有外部 ID）- 只返回 Stash 相关的 ID
+    # ProviderIds（所有外部 ID）- 无论是否为空都写入
     provider_ids = build_provider_ids(studio)
-    if provider_ids:
-        emby_data["ProviderIds"] = provider_ids
+    emby_data["ProviderIds"] = provider_ids if provider_ids else {}
 
     # 添加图片路径（供 emby_uploader 下载图片使用）
     if studio.get("image_path"):

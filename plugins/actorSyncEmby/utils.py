@@ -44,6 +44,29 @@ PERFORMER_FRAGMENT_FOR_API = """    id
     }"""
 
 
+def build_performer_name(performer: Dict[str, Any]) -> str:
+    """
+    构建演员完整姓名（包含消歧义）
+    
+    Args:
+        performer: 演员数据字典
+        
+    Returns:
+        完整姓名字符串
+        
+    示例:
+        - name="ActorName", disambiguation="Studio A" → "ActorName (Studio A)"
+        - name="ActorName", disambiguation="" → "ActorName"
+        - name="ActorName", disambiguation=None → "ActorName"
+    """
+    name = performer.get("name", "")
+    disambiguation = performer.get("disambiguation", "")
+    
+    if name and disambiguation:
+        return f"{name} ({disambiguation})"
+    return name
+
+
 def safe_segment(segment: str) -> str:
     """简单清理路径段，避免出现奇怪字符。"""
     segment = segment.strip().replace("\\", "_").replace("/", "_")

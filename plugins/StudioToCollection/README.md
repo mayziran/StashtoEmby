@@ -1,6 +1,6 @@
 # StudioToCollection 插件
 
-**版本：1.3.0**
+**版本：1.3.1**
 
 将 Stash 工作室元数据同步到 Emby 合集（BoxSet）。
 

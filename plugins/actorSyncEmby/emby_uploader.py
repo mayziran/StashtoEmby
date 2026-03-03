@@ -94,11 +94,14 @@ def update_actor_metadata_in_emby(performer: Dict[str, Any], actor_id: str, emby
     """
     更新 Emby 中演员的元数据。
     """
+    from utils import build_performer_name
+
     if not emby_server or not emby_api_key:
         log.error("Emby 服务器地址或 API 密钥未配置")
         raise
 
-    name = performer.get("name", "")
+    # 构建完整姓名（包含消歧义）
+    name = build_performer_name(performer)
     if not name:
         log.error("演员名称为空，无法更新元数据")
         return
@@ -118,27 +121,23 @@ def update_actor_metadata_in_emby(performer: Dict[str, Any], actor_id: str, emby
     try:
         r_get = requests.get(get_url, timeout=30)
     except requests.exceptions.Timeout:
-        log.error(f"获取演员 {performer.get('name')} 完整信息超时（30 秒）")
+        log.error(f"获取演员 {name} 完整信息超时（30 秒）")
         raise
     except requests.exceptions.RequestException as e:
-        log.error(f"获取演员 {performer.get('name')} 完整信息时发生网络错误：{e}")
+        log.error(f"获取演员 {name} 完整信息时发生网络错误：{e}")
         raise
     if r_get.status_code != 200:
-        log.error(f"无法获取演员 {performer.get('name')} 的完整信息，状态码：{r_get.status_code}")
+        log.error(f"无法获取演员 {name} 的完整信息，状态码：{r_get.status_code}")
         log.info(f"响应内容：{r_get.text}")
         raise
     try:
         person_data = r_get.json()
     except ValueError as e:
-        log.error(f"解析演员 {performer.get('name')} 完整信息 JSON 时发生错误：{e}")
+        log.error(f"解析演员 {name} 完整信息 JSON 时发生错误：{e}")
         return
 
-    # 整理元数据
+    # 整理元数据 - 无论是否为空都覆盖
     lines = []
-    # 最优先的信息
-    if performer.get('disambiguation'):
-        lines.append("消歧义：" + performer['disambiguation'])
-
     # 优先级较高的信息
     if performer.get('gender'):
         # 将英文性别转换为中文
@@ -197,11 +196,11 @@ def update_actor_metadata_in_emby(performer: Dict[str, Any], actor_id: str, emby
             urls_str = "\n".join(valid_urls)
             lines.append("相关链接:\n" + urls_str)
 
-    if lines:
-        overview = '\n'.join(lines)
-        person_data['Overview'] = overview
+    # Overview - 无论是否为空都覆盖
+    overview = '\n'.join(lines) if lines else ""
+    person_data['Overview'] = overview
 
-    # 更新生日信息
+    # 更新生日信息 - 无论是否为空都覆盖
     if performer.get('birthdate'):
         birthdate = performer.get("birthdate")
         if birthdate:
@@ -214,8 +213,10 @@ def update_actor_metadata_in_emby(performer: Dict[str, Any], actor_id: str, emby
                 ).replace("+00:00", "Z")
             except Exception:
                 person_data["PremiereDate"] = None
+    else:
+        person_data["PremiereDate"] = None
 
-    # 更新死亡日期信息
+    # 更新死亡日期信息 - 无论是否为空都覆盖
     if performer.get('death_date') and performer.get('death_date').strip():
         deathdate = performer.get("death_date")
         if deathdate:
@@ -228,12 +229,14 @@ def update_actor_metadata_in_emby(performer: Dict[str, Any], actor_id: str, emby
                 ).replace("+00:00", "Z")
             except Exception:
                 person_data["EndDate"] = None
+    else:
+        person_data["EndDate"] = None
 
+    # ProductionLocations - 无论是否为空都覆盖
     country = performer.get("country")
-    if country:
-        person_data["ProductionLocations"] = [country]
+    person_data["ProductionLocations"] = [country] if country else []
 
-    # 添加标签（Tags）
+    # 添加标签（Tags）- 无论是否为空都覆盖
     tag_items = []
 
     if performer.get('gender'):
@@ -267,18 +270,25 @@ def update_actor_metadata_in_emby(performer: Dict[str, Any], actor_id: str, emby
             elif isinstance(tag, str):
                 tag_items.append({"Name": tag, "Id": None})
 
-    if tag_items:
-        person_data['TagItems'] = tag_items
+    person_data['TagItems'] = tag_items
 
-    # 添加 Stash ID 作为外部标识符（支持多个 Stash-Box 站点 + 源链接）
+    # 添加 Stash ID 作为外部标识符（支持多个 Stash-Box 站点 + 源链接）- 固定 7 个字段，无论是否为空都写入
     # 参考 StudioToCollection 的 build_provider_ids()
-    if 'ProviderIds' not in person_data:
-        person_data['ProviderIds'] = {}
+    # 初始化 7 个字段为空字符串
+    provider_ids = {
+        "stash": "",
+        "stashdb": "",
+        "theporndb": "",
+        "fansdb": "",
+        "javstash": "",
+        "pmvstash": "",
+        "scene_source_url": ""
+    }
 
     # 本地 Stash ID
     stash_id = performer.get("id")
     if stash_id:
-        person_data['ProviderIds']['stash'] = str(stash_id)
+        provider_ids['stash'] = str(stash_id)
 
     # 处理所有 stash_ids，一个站点一个 UUID
     if performer.get("stash_ids"):
@@ -296,29 +306,38 @@ def update_actor_metadata_in_emby(performer: Dict[str, Any], actor_id: str, emby
             identifier = domain.split('.')[0].lower()
 
             # 直接写入 UUID（一个站点一个 UUID）
-            person_data['ProviderIds'][identifier] = stash_id
+            if identifier in provider_ids:
+                provider_ids[identifier] = stash_id
 
-    # 源链接：写入 scene_source_url（去掉协议前缀，反斜杠替代正斜杠）
+    # 源链接
     urls = performer.get("urls", [])
     if urls:
         url_without_scheme = urls[0].replace("https://", "").replace("http://", "")
-        person_data['ProviderIds']['scene_source_url'] = url_without_scheme.replace('/', '\\')
+        provider_ids['scene_source_url'] = url_without_scheme.replace('/', '\\')
+
+    # 保留原有的其他 ProviderIds（如 themoviedb、tvdb 等）
+    if 'ProviderIds' in person_data:
+        for key, value in person_data['ProviderIds'].items():
+            if key not in provider_ids:
+                provider_ids[key] = value
+
+    person_data['ProviderIds'] = provider_ids
 
     # 使用 POST 方法更新到 Items 端点
     update_url = f"{emby_server}/emby/Items/{found_actor_id}?api_key={emby_api_key}"
     try:
         r2 = requests.post(update_url, json=person_data, headers={"Content-Type": "application/json"}, timeout=30)
         if r2.status_code in [200, 204]:
-            log.info(f"成功更新演员 {performer.get('name')} 的元数据")
+            log.info(f"成功更新演员 {name} 的元数据")
         else:
-            log.error(f"更新演员 {performer.get('name')} 元数据失败，状态码：{r2.status_code}")
+            log.error(f"更新演员 {name} 元数据失败，状态码：{r2.status_code}")
             log.info(f"响应内容：{r2.text}")
             raise
     except requests.exceptions.Timeout:
-        log.error(f"更新演员 {performer.get('name')} 元数据超时（30 秒）")
+        log.error(f"更新演员 {name} 元数据超时（30 秒）")
         raise
     except requests.exceptions.RequestException as e:
-        log.error(f"更新演员 {performer.get('name')} 元数据失败：{e}")
+        log.error(f"更新演员 {name} 元数据失败：{e}")
         raise
 
 
@@ -348,7 +367,9 @@ def upload_actor_to_emby(
         log.error("Emby 服务器地址或 API 密钥未配置")
         raise
 
-    name = performer.get("name")
+    # 构建完整姓名（包含消歧义）
+    from utils import build_performer_name
+    name = build_performer_name(performer)
     if not name:
         log.warning("演员没有名称，跳过上传到 Emby")
         return

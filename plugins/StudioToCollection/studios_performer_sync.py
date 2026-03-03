@@ -25,9 +25,10 @@ STUDIO_FRAGMENT = """
     name
 """
 
-# 演员 Fragment（只需要 name）
+# 演员 Fragment（需要 name 和 disambiguation）
 PERFORMER_FRAGMENT = """
     name
+    disambiguation
 """
 
 
@@ -151,12 +152,16 @@ def get_performers_by_studio(
             fragment=PERFORMER_FRAGMENT
         )
 
-        # 转换为 Emby People 格式（只有姓名）
+        # 转换为 Emby People 格式（包含消歧义的完整姓名）
         people = []
         for p in performers:
             if not isinstance(p, dict):
                 continue
+            # 构建完整姓名（包含消歧义）
             name = p.get("name", "")
+            disambiguation = p.get("disambiguation", "")
+            if name and disambiguation:
+                name = f"{name} ({disambiguation})"
             if not name:
                 continue
 

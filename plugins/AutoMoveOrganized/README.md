@@ -37,7 +37,7 @@
 - `{scene_date}` - 场景日期
 - `{date_year}`, `{date_month}`, `{date_day}` - 年/月/日
 - `{studio}` - 制作商名称
-- `{performers}` - 演员列表
+- `{performers}` - 演员列表（多个演员用 - 连接）
 - `{first_performer}` - 第一个演员
 - `{resolution}`, `{quality}` - 分辨率和质量
 - `{original_basename}`, `{original_name}`, `{ext}` - 原始文件名相关

@@ -265,7 +265,8 @@ def _process_performer(
     Returns:
         (need_local, need_emby, local_success, emby_success)
     """
-    performer_name = performer.get("name")
+    from utils import build_performer_name
+    performer_name = build_performer_name(performer)
     if not performer_name:
         log.warning(f"[{PLUGIN_ID}] 演员 ID {performer.get('id')} 没有名称，跳过处理")
         return False, False, True, True
@@ -427,9 +428,10 @@ def handle_task(
         # 第 3 步：筛选需要处理的演员 ID
         if use_batch_check:
             current_page_ids = []
+            from utils import build_performer_name
             for performer in page_performers:
                 performer_id = performer.get("id")
-                performer_name = performer.get("name")
+                performer_name = build_performer_name(performer)
                 if not performer_id or not performer_name:
                     continue
 

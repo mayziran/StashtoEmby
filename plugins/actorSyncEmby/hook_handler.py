@@ -122,6 +122,7 @@ def _process_hook_performer(
     """
     import stashapi.log as log
     from actorSyncEmby import PLUGIN_ID
+    from utils import build_performer_name
 
     # 获取演员完整数据（使用自定义 fragment，只获取需要的 24 个字段）
     performer = stash.find_performer(performer_id, fragment=PERFORMER_FRAGMENT_FOR_API)
@@ -130,7 +131,7 @@ def _process_hook_performer(
         log.error(msg)
         return msg
 
-    performer_name = performer.get("name", "Unknown")
+    performer_name = build_performer_name(performer) or "Unknown"
     hook_mode = settings.get("hook_mode", 3)
 
     # hook_mode=0：关闭
