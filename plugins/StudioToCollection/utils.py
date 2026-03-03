@@ -54,18 +54,24 @@ def build_overview(studio: Dict[str, Any]) -> str:
     """构建 Overview（别名 → 简介 → 链接）"""
     lines = []
 
+    # 1. 别名
     aliases = studio.get('aliases', [])
     if aliases:
         lines.append("别名：" + " / ".join(aliases))
 
-    if studio.get('details'):
-        lines.append(studio['details'])
+    # 2. 详情（添加"简介："前缀，参考 actorSyncEmby）
+    details = studio.get('details')
+    if details and details.strip():
+        lines.append("简介：" + details)
 
+    # 3. 相关链接（统一格式，参考 actorSyncEmby）
     urls = studio.get('urls', [])
     if urls:
-        lines.append("\n相关链接:\n" + "\n".join(urls))
+        valid_urls = [url for url in urls if url and url.strip()]
+        if valid_urls:
+            lines.append("相关链接:\n" + "\n".join(valid_urls))
 
-    return '\n'.join(lines)
+    return '\n'.join(lines) if lines else ""
 
 
 def build_tags(studio: Dict[str, Any]) -> List[str]:
