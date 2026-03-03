@@ -196,8 +196,7 @@ def handle_task(stash: Any, settings: Dict[str, Any], task_log_func: Any) -> str
                 emby_api_key=settings["emby_api_key"],
                 user_id=user_id,
                 server_conn=settings.get("server_connection", {}),
-                stash_api_key=settings.get("stash_api_key", ""),
-                dry_run=settings["dry_run"]
+                stash_api_key=settings.get("stash_api_key", "")
             ):
                 success_list.append(studio_name)
                 log.info(f"[{PLUGIN_ID}] ✓ {studio_name}")

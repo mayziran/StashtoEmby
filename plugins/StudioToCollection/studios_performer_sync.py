@@ -175,8 +175,7 @@ def upload_people_to_emby(
     emby_api_key: str,
     user_id: str,
     collection_id: str,
-    people: List[Dict[str, Any]],
-    dry_run: bool = False
+    people: List[Dict[str, Any]]
 ) -> bool:
     """
     上传演员列表到 Emby 合集
@@ -187,15 +186,10 @@ def upload_people_to_emby(
         user_id: Emby 用户 ID
         collection_id: Emby 合集 ID
         people: 演员列表（Emby People 格式）
-        dry_run: 是否仅模拟
 
     Returns:
         上传是否成功
     """
-    if dry_run:
-        log.info(f"[{PLUGIN_ID}] [模拟] 上传演员到合集：{collection_id}, 演员数：{len(people)}")
-        return True
-
     try:
         # 第 1 步：获取合集现有数据
         get_url = f"{emby_server}/emby/Users/{user_id}/Items/{collection_id}?api_key={emby_api_key}"
@@ -339,8 +333,7 @@ def handle_task(
                 emby_api_key=settings["emby_api_key"],
                 user_id=user_id,
                 collection_id=collection_id,
-                people=performers,
-                dry_run=settings["dry_run"]
+                people=performers
             ):
                 success_list.append(studio_name)
                 total_performers += len(performers)

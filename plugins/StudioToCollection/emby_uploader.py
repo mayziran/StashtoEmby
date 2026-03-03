@@ -132,12 +132,11 @@ def _upload_image_to_emby(
     collection_id: str,
     image_type: str,
     image_data: bytes,
-    content_type: str = "image/jpeg",
-    dry_run: bool = False
+    content_type: str = "image/jpeg"
 ) -> bool:
     """
     上传图片到 Emby（内部函数，参考 actorSyncEmby 的 _upload_image_to_emby）
-    
+
     Args:
         emby_server: Emby 服务器地址
         emby_api_key: Emby API 密钥
@@ -145,15 +144,10 @@ def _upload_image_to_emby(
         image_type: 图片类型（Primary 或 Logo）
         image_data: 图片二进制数据
         content_type: 图片 Content-Type
-        dry_run: 是否仅模拟
-    
+
     Returns:
         上传是否成功
     """
-    if dry_run:
-        log.info(f"[{PLUGIN_ID}] [模拟] 上传{image_type}图片：{collection_id}")
-        return True
-    
     try:
         # Base64 编码（参考 actorSyncEmby）
         b64_image = base64.b64encode(image_data)
@@ -194,32 +188,26 @@ def upload_metadata(
     emby_data: dict,
     emby_server: str,
     emby_api_key: str,
-    user_id: str,
-    dry_run: bool = False
+    user_id: str
 ) -> bool:
     """
     上传合集元数据到 Emby
-    
+
     参考 actorSyncEmby 插件：
     - 先获取 Emby 现有数据
     - 在现有数据基础上更新（保留原有数据）
     - POST 完整数据回去
-    
+
     Args:
         collection_id: Emby 合集 ID
         emby_data: 要更新的元数据
         emby_server: Emby 服务器地址
         emby_api_key: Emby API 密钥
         user_id: Emby 用户 ID（用于获取现有数据）
-        dry_run: 是否仅模拟
-    
+
     Returns:
         上传是否成功
     """
-    if dry_run:
-        log.info(f"[{PLUGIN_ID}] [模拟] 更新元数据：{collection_id}")
-        return True
-    
     try:
         # 第 1 步：获取合集现有数据（参考 actorSyncEmby）
         get_url = f"{emby_server}/emby/Users/{user_id}/Items/{collection_id}?api_key={emby_api_key}"
@@ -281,8 +269,7 @@ def upload_studio_to_emby(
     emby_api_key: str,
     user_id: str,
     server_conn: Dict[str, Any],
-    stash_api_key: str = "",
-    dry_run: bool = False
+    stash_api_key: str = ""
 ) -> bool:
     """
     上传工作室到 Emby（统一上传入口）
@@ -301,7 +288,6 @@ def upload_studio_to_emby(
         user_id: Emby 用户 ID（用于获取现有数据）
         server_conn: Stash 服务器连接信息（用于下载图片）
         stash_api_key: Stash API 密钥（用于下载图片）
-        dry_run: 是否仅模拟
 
     Returns:
         上传是否成功
@@ -312,8 +298,7 @@ def upload_studio_to_emby(
         emby_data=emby_data,
         emby_server=emby_server,
         emby_api_key=emby_api_key,
-        user_id=user_id,
-        dry_run=dry_run
+        user_id=user_id
     ):
         return False
 
@@ -335,8 +320,7 @@ def upload_studio_to_emby(
             collection_id=collection_id,
             image_type="Primary",
             image_data=image_bytes,
-            content_type=content_type,
-            dry_run=dry_run
+            content_type=content_type
         ):
             return False
 
@@ -346,8 +330,7 @@ def upload_studio_to_emby(
             collection_id=collection_id,
             image_type="Logo",
             image_data=image_bytes,
-            content_type=content_type,
-            dry_run=dry_run
+            content_type=content_type
         ):
             return False
 

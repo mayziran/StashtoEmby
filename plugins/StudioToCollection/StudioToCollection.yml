@@ -16,10 +16,6 @@ settings:
     displayName: Emby API 密钥
     description: "Emby 服务器 API 密钥"
     type: STRING
-  dryRun:
-    displayName: 仅模拟
-    description: "不真正写入 Emby，只输出日志"
-    type: BOOLEAN
   workerDelays:
     displayName: 异步 Worker 延迟时间
     description: "格式：等待 Stash 创建影片时间，等待 Emby 扫描时间（秒），例如：35,70。默认 35,70"

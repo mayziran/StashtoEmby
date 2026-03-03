@@ -210,7 +210,7 @@ StashtoEmby/plugins/StudioToCollection/studio_sync_worker.log
   - 新增 `studios_performer_sync.py` 脚本
   - 新增 Task「同步工作室演员到合集」
   - 将工作室关联的演员同步到 Emby 合集的 People 字段
-  - 支持 dryRun 模式和 parentIds 限定
+  - 支持 parentIds 限定
 
 - **1.1.0** - 优化数据传递
   - 删除冗余的 `studio` 参数传递，`emby_uploader` 只依赖转换后的 `emby_data`

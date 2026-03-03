@@ -180,8 +180,7 @@ def handle_update_hook(
         emby_api_key=settings["emby_api_key"],
         user_id=user_id,
         server_conn=settings.get("server_connection", {}),
-        stash_api_key=settings.get("stash_api_key", ""),
-        dry_run=settings["dry_run"]
+        stash_api_key=settings.get("stash_api_key", "")
     ):
         return f"工作室 {studio_name} 更新成功，已同步到 Emby 合集"
     else:

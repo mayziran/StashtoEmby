@@ -55,7 +55,6 @@ def load_settings(stash: StashInterface) -> Dict[str, Any]:
             "enable_hook": False,
             "emby_server": "",
             "emby_api_key": "",
-            "dry_run": False,
             "worker_delays": "35,70",
             "scheduled_task_id": "",
             "enable_worker_log": True,
@@ -75,7 +74,6 @@ def load_settings(stash: StashInterface) -> Dict[str, Any]:
         "enable_hook": bool(_get_val("enableHook", False)),
         "emby_server": _get_val("embyServer", ""),
         "emby_api_key": _get_val("embyApiKey", ""),
-        "dry_run": bool(_get_val("dryRun", False)),
         "worker_delays": _get_val("workerDelays", "35,70"),
         "scheduled_task_id": _get_val("scheduledTaskId", ""),
         "enable_worker_log": bool(_get_val("enableWorkerLog", True)),
@@ -86,7 +84,7 @@ def load_settings(stash: StashInterface) -> Dict[str, Any]:
 
     log.info(
         f"[{PLUGIN_ID}] 加载配置：enable_hook={settings['enable_hook']}, "
-        f"emby_server='{settings['emby_server']}', dry_run={settings['dry_run']}, "
+        f"emby_server='{settings['emby_server']}', "
         f"worker_delays='{settings['worker_delays']}', enable_worker_log={settings['enable_worker_log']}"
     )
 
@@ -124,7 +122,6 @@ def start_worker(
         "emby_data": emby_data,
         "collection_id": collection_id,
         "user_id": user_id,
-        "dry_run": settings["dry_run"],
         "stash_wait": stash_wait,
         "emby_wait": emby_wait,
         "scheduled_task_id": settings.get("scheduled_task_id"),
