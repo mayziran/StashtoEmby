@@ -23,6 +23,15 @@ from emby_uploader import upload_studio_to_emby
 PLUGIN_ID = "StudioToCollection"
 
 
+def _get_user_id(settings: Dict[str, Any]) -> Optional[str]:
+    """获取 Emby 用户 ID（带错误处理）"""
+    try:
+        return get_emby_user_id(settings["emby_server"], settings["emby_api_key"])
+    except Exception as e:
+        log.error(f"[{PLUGIN_ID}] 获取 Emby 用户 ID 失败：{e}")
+        return None
+
+
 def find_collection_by_name(
     emby_server: str,
     emby_api_key: str,
@@ -84,10 +93,9 @@ def handle_create_hook(
     studio_name = studio.get("name", "Unknown")
 
     # 获取 Emby 用户 ID
-    user_id = get_emby_user_id(settings["emby_server"], settings["emby_api_key"])
+    user_id = _get_user_id(settings)
     if not user_id:
-        log.error(f"[{PLUGIN_ID}] [Create] 无法获取 Emby 用户 ID: {studio_name}")
-        return f"无法获取 Emby 用户 ID: {studio_name}"
+        return f"无法获取 Emby 用户 ID：{studio_name}"
 
     # 搜索合集
     collection = find_collection_by_name(
@@ -144,10 +152,9 @@ def handle_update_hook(
     studio_name = studio.get("name", "Unknown")
 
     # 获取 Emby 用户 ID
-    user_id = get_emby_user_id(settings["emby_server"], settings["emby_api_key"])
+    user_id = _get_user_id(settings)
     if not user_id:
-        log.error(f"[{PLUGIN_ID}] [Update] 无法获取 Emby 用户 ID: {studio_name}")
-        return f"无法获取 Emby 用户 ID: {studio_name}"
+        return f"无法获取 Emby 用户 ID：{studio_name}"
 
     # 搜索合集
     collection = find_collection_by_name(

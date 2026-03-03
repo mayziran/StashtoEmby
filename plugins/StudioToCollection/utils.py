@@ -7,7 +7,6 @@
     - 数据构建函数
 """
 
-import sys
 from typing import Any, Dict, List, Optional
 
 import requests
@@ -37,15 +36,11 @@ STUDIO_FRAGMENT_FOR_API = """
 
 def get_emby_user_id(emby_server: str, emby_api_key: str) -> Optional[str]:
     """获取 Emby 用户 ID"""
-    try:
-        url = f"{emby_server}/emby/Users"
-        params = {"api_key": emby_api_key}
-        response = requests.get(url, params=params, timeout=30)
-        users = response.json()
-        return users[0]["Id"] if users else None
-    except Exception as e:
-        sys.stderr.write(f"获取 Emby 用户 ID 失败：{e}\n")
-        return None
+    url = f"{emby_server}/emby/Users"
+    params = {"api_key": emby_api_key}
+    response = requests.get(url, params=params, timeout=30)
+    users = response.json()
+    return users[0]["Id"] if users else None
 
 
 # ========== 数据构建函数 ==========
@@ -77,7 +72,7 @@ def build_overview(studio: Dict[str, Any]) -> str:
 def build_tags(studio: Dict[str, Any]) -> List[str]:
     """构建 Tags 列表"""
     tags = studio.get("tags", [])
-    return [tag["name"] for tag in tags if tag.get("name")]
+    return [tag["name"] for tag in tags if tag.get("name") and tag["name"].strip()]
 
 
 def build_provider_ids(studio: Dict[str, Any]) -> Dict[str, str]:
@@ -146,7 +141,7 @@ def build_emby_data(studio: Dict[str, Any], collection_id: str) -> Dict[str, Any
 
     Args:
         studio: 工作室数据
-        collection_id: 合集 ID
+        collection_id: Emby 合集 ID
 
     Returns:
         Emby 数据字典

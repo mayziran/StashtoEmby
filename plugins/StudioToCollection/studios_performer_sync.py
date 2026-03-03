@@ -46,15 +46,11 @@ def task_log(message: str, progress: float | None = None) -> None:
 
 def get_emby_user_id(emby_server: str, emby_api_key: str) -> Optional[str]:
     """获取 Emby 用户 ID"""
-    try:
-        url = f"{emby_server}/emby/Users"
-        params = {"api_key": emby_api_key}
-        response = requests.get(url, params=params, timeout=30)
-        users = response.json()
-        return users[0]["Id"] if users else None
-    except Exception as e:
-        log.error(f"[{PLUGIN_ID}] 获取 Emby 用户 ID 失败：{e}")
-        return None
+    url = f"{emby_server}/emby/Users"
+    params = {"api_key": emby_api_key}
+    response = requests.get(url, params=params, timeout=30)
+    users = response.json()
+    return users[0]["Id"] if users else None
 
 
 def get_all_collections(
@@ -294,7 +290,11 @@ def handle_task(
             return msg
 
         # 2. 获取 Emby 用户 ID
-        user_id = get_emby_user_id(settings["emby_server"], settings["emby_api_key"])
+        try:
+            user_id = get_emby_user_id(settings["emby_server"], settings["emby_api_key"])
+        except Exception as e:
+            log.error(f"[{PLUGIN_ID}] 获取 Emby 用户 ID 失败：{e}")
+            return "获取 Emby 用户 ID 失败"
         if not user_id:
             log.error(f"[{PLUGIN_ID}] 无法获取 Emby 用户 ID")
             return "无法获取 Emby 用户 ID"

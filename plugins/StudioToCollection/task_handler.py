@@ -148,7 +148,11 @@ def handle_task(stash: Any, settings: Dict[str, Any], task_log_func: Any) -> str
 
         # 2. 获取 Emby 用户 ID
         log.info(f"[{PLUGIN_ID}] 正在获取 Emby 用户 ID...")
-        user_id = get_emby_user_id(settings["emby_server"], settings["emby_api_key"])
+        try:
+            user_id = get_emby_user_id(settings["emby_server"], settings["emby_api_key"])
+        except Exception as e:
+            log.error(f"[{PLUGIN_ID}] 获取 Emby 用户 ID 失败：{e}")
+            return "获取 Emby 用户 ID 失败"
         if not user_id:
             log.error(f"[{PLUGIN_ID}] 无法获取 Emby 用户 ID")
             return "无法获取 Emby 用户 ID"
