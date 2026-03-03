@@ -26,7 +26,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 from emby_uploader import upload_studio_to_emby
 
 LOG_FILE = os.path.join(os.path.dirname(__file__), "studio_sync_worker.log")
-_enable_worker_log = True  # 在 main() 中从配置设置
+_enable_worker_log = False  # 默认关闭
 
 
 def log_info(message: str) -> None:
@@ -279,8 +279,8 @@ def main():
     try:
         config = load_config()
 
-        # 从配置读取日志开关（在使用任何日志之前设置）
-        _enable_worker_log = config.get("enable_worker_log", True)
+        # 从配置读取日志开关（默认关闭）
+        _enable_worker_log = config.get("enable_worker_log", False)
 
         log_info(f"=== Worker 启动 ===")
         log_info(f"工作室：{config['studio_name']}")
