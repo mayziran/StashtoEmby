@@ -185,7 +185,7 @@ def handle_task(stash: Any, settings: Dict[str, Any], task_log_func: Any) -> str
                 continue
 
             # 构建 Emby 数据
-            emby_data = build_emby_data(studio, collection_id)
+            emby_data = build_emby_data(studio)
 
             # 调用 emby_uploader 上传（参考 actorSyncEmby）
             if upload_studio_to_emby(

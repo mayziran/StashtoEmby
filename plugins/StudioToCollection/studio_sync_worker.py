@@ -2,9 +2,9 @@
 studio_sync_worker.py - Create Hook 异步执行
 
 职责:
-    1. 接收 hook 传递的配置（studio 原始数据、emby_data、collection_id 等）
+    1. 接收 hook 传递的配置（studio 原始数据、emby_data、user_id 等）
     2. 延迟等待 + 触发 Emby 计划任务
-    3. 搜索合集确认存在（三次重试机制）
+    3. 搜索合集（三次重试机制）
     4. 调用 emby_uploader.upload_studio_to_emby 上传
 
 注意:
@@ -135,19 +135,16 @@ def trigger_emby_scheduled_task(emby_server: str, emby_api_key: str, task_id: st
 
 def sync_studio_to_collection(config: Dict[str, Any]) -> str:
     """
-    同步工作室到 Emby
+    同步工作室到 Emby（Create Hook 专用）
 
     运行逻辑:
         1. 等待 delay_seconds → 触发计划任务 → 等待 30 秒 → 第 1 次搜索
         2. 未找到 → 等待 60 秒 → 触发计划任务 → 第 2 次搜索
         3. 未找到 → 等待 90 秒 → 触发计划任务 → 第 3 次搜索 → 放弃
 
-    注意：
-        - 如果 config 中有 collection_id，直接使用（Update Hook 模式）
-        - 如果没有 collection_id，Worker 自己搜索（Create Hook 模式）
+    注意：本函数只用于 Create Hook，Update Hook 由 hook_handler 直接上传
     """
     studio_name = config["studio_name"]
-    collection_id = config.get("collection_id")
     task_id = config.get("scheduled_task_id")
     user_id = config.get("user_id")
 
@@ -180,30 +177,20 @@ def sync_studio_to_collection(config: Dict[str, Any]) -> str:
         log_info(f"[{studio_name}] 等待 30 秒，等待计划任务执行...")
         time.sleep(30)
 
-        # 搜索合集（如果 config 中没有 collection_id，需要搜索）
-        current_collection_id = collection_id
-        if not current_collection_id:
-            log_info(f"[{studio_name}] 第 {attempt} 次搜索合集...")
-            collection = find_collection_by_name(
-                config["emby_server"],
-                config["emby_api_key"],
-                user_id,
-                studio_name
-            )
-            if collection:
-                current_collection_id = collection["Id"]
-                log_info(f"[{studio_name}] ✓ 找到合集 ID: {current_collection_id}")
-            else:
-                log_info(f"[{studio_name}] 第 {attempt} 次搜索未找到合集")
-        else:
-            log_info(f"[{studio_name}] 使用已有合集 ID: {current_collection_id}")
+        # 搜索合集
+        log_info(f"[{studio_name}] 第 {attempt} 次搜索合集...")
+        collection = find_collection_by_name(
+            config["emby_server"],
+            config["emby_api_key"],
+            user_id,
+            studio_name
+        )
 
-        # 上传（如果有 collection_id）
-        if current_collection_id:
-            log_info(f"[{studio_name}] 开始上传...")
+        if collection:
+            log_info(f"[{studio_name}] ✓ 找到合集，开始上传...")
             if upload_studio_to_emby(
                 emby_data=config["emby_data"],
-                collection_id=current_collection_id,
+                collection_id=collection["Id"],
                 emby_server=config["emby_server"],
                 emby_api_key=config["emby_api_key"],
                 user_id=user_id,
@@ -236,7 +223,6 @@ def main():
 
         log_info(f"=== Worker 启动 ===")
         log_info(f"工作室：{config['studio_name']}")
-        log_info(f"合集 ID: {config.get('collection_id')}")
         log_info(f"启用日志：{_enable_worker_log}")
 
         result = sync_studio_to_collection(config)

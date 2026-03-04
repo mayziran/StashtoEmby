@@ -135,18 +135,17 @@ def build_provider_ids(studio: Dict[str, Any]) -> Dict[str, str]:
     return provider_ids
 
 
-def build_emby_data(studio: Dict[str, Any], collection_id: str) -> Dict[str, Any]:
+def build_emby_data(studio: Dict[str, Any]) -> Dict[str, Any]:
     """
     构建完整的 Emby 数据
 
     Args:
         studio: 工作室数据
-        collection_id: Emby 合集 ID
 
     Returns:
         Emby 数据字典
     """
-    emby_data = {"Id": collection_id}
+    emby_data = {}
 
     # 概述（Overview）- 无论是否为空都写入
     overview = build_overview(studio)

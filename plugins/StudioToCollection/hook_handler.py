@@ -57,8 +57,8 @@ def _prepare_sync_data(
 
     log.info(f"[{PLUGIN_ID}] 获取到 Emby 用户 ID: {user_id}")
 
-    # 构建 Emby 数据（先不填 collection_id，由调用方填充）
-    emby_data = build_emby_data(studio, collection_id="")
+    # 构建 Emby 数据
+    emby_data = build_emby_data(studio)
 
     return {
         "studio": studio,
@@ -88,14 +88,13 @@ def handle_create_hook(
 
     studio_name = data["studio_name"]
 
-    # 启动 Worker（不传 collection_id，Worker 自己搜索）
+    # 启动 Worker（Worker 自己搜索合集）
     log.info(f"[{PLUGIN_ID}] [Create] 启动 Worker: {studio_name}")
     start_worker(
         studio_id=studio_id,
         studio_name=studio_name,
         studio=data["studio"],
         emby_data=data["emby_data"],
-        collection_id="",  # Create 时合集还不存在，由 Worker 搜索
         user_id=data["user_id"],
         settings=settings,
         server_conn=settings.get("server_connection", {}),
@@ -136,9 +135,6 @@ def handle_update_hook(
     if not collection:
         log.error(f"[{PLUGIN_ID}] [Update] 未找到合集：{studio_name}")
         return f"未找到合集：{studio_name}，跳过同步"
-
-    # 更新 emby_data 的 Id
-    data["emby_data"]["Id"] = collection["Id"]
 
     # 上传到 Emby
     log.info(f"[{PLUGIN_ID}] [Update] 同步到 Emby: {studio_name}")

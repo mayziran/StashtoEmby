@@ -96,11 +96,10 @@ def start_worker(
     studio_name: str,
     studio: Dict[str, Any],
     emby_data: Dict[str, Any],
-    collection_id: str,
     user_id: str,
     settings: Dict[str, Any],
-    server_conn: Dict[str, Any],  # 新增：传递 server_conn
-    stash_api_key: str  # 新增：传递 stash_api_key
+    server_conn: Dict[str, Any],
+    stash_api_key: str
 ) -> None:
     """启动 worker 异步执行（Create Hook 专用）"""
     worker_script = os.path.join(os.path.dirname(__file__), "studio_sync_worker.py")
@@ -120,7 +119,6 @@ def start_worker(
         "studio_id": studio_id,
         "studio_name": studio_name,
         "emby_data": emby_data,
-        "collection_id": collection_id,
         "user_id": user_id,
         "stash_wait": stash_wait,
         "emby_wait": emby_wait,
