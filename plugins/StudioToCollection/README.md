@@ -1,6 +1,6 @@
 # StudioToCollection 插件
 
-**版本：1.3.1**
+**版本：1.3.2**
 
 将 Stash 工作室元数据同步到 Emby 合集（BoxSet）。
 
@@ -205,6 +205,12 @@ StashtoEmby/plugins/StudioToCollection/studio_sync_worker.log
 5. 复制想要触发的任务 ID（如 Jellyfin.Plugin.Stash 的刷新任务）
 
 ## 版本历史
+
+- **1.3.2** - 修复 Create Hook 逻辑
+  - 修复 Create Hook 不再搜索合集，由 Worker 延迟后搜索
+  - 删除 `emby_data["Id"]` 多余字段（只使用 `collection_id` 参数）
+  - 删除 `build_emby_data()` 的 `collection_id` 参数
+  - 修复 `enable_worker_log` 默认值为关闭
 
 - **1.2.0** - 新增演员同步功能
   - 新增 `studios_performer_sync.py` 脚本
