@@ -141,8 +141,10 @@ def sync_studio_to_collection(config: Dict[str, Any]) -> str:
         1. 等待 delay_seconds → 触发计划任务 → 等待 30 秒 → 第 1 次搜索
         2. 未找到 → 等待 60 秒 → 触发计划任务 → 第 2 次搜索
         3. 未找到 → 等待 90 秒 → 触发计划任务 → 第 3 次搜索 → 放弃
-    
-    注意：本函数只负责延迟等待和搜索合集，上传由 emby_uploader.upload_studio_to_emby 完成
+
+    注意：
+        - 如果 config 中有 collection_id，直接使用（Update Hook 模式）
+        - 如果没有 collection_id，Worker 自己搜索（Create Hook 模式）
     """
     studio_name = config["studio_name"]
     collection_id = config.get("collection_id")
@@ -152,9 +154,6 @@ def sync_studio_to_collection(config: Dict[str, Any]) -> str:
     # 解析延迟配置
     stash_wait = config.get("stash_wait", 35)
     emby_wait = config.get("emby_wait", 70)
-
-    if not collection_id:
-        return f"缺少 collection_id"
 
     # ========== 阶段 1：初始等待 ==========
     log_info(f"[{studio_name}] 等待 {stash_wait} 秒，等待 Stash 创建影片...")
@@ -170,7 +169,7 @@ def sync_studio_to_collection(config: Dict[str, Any]) -> str:
 
     # ========== 重试配置：3 次搜索，每次等待时间不同 ==========
     retry_delays = [30, 60, 90]  # 第 1/2/3 次搜索前的等待时间
-    
+
     for attempt, delay in enumerate(retry_delays, 1):
         # 触发计划任务
         if task_id:
@@ -181,20 +180,30 @@ def sync_studio_to_collection(config: Dict[str, Any]) -> str:
         log_info(f"[{studio_name}] 等待 30 秒，等待计划任务执行...")
         time.sleep(30)
 
-        # 搜索合集
-        log_info(f"[{studio_name}] 第 {attempt} 次搜索合集...")
-        collection = find_collection_by_name(
-            config["emby_server"],
-            config["emby_api_key"],
-            user_id,
-            studio_name
-        )
+        # 搜索合集（如果 config 中没有 collection_id，需要搜索）
+        current_collection_id = collection_id
+        if not current_collection_id:
+            log_info(f"[{studio_name}] 第 {attempt} 次搜索合集...")
+            collection = find_collection_by_name(
+                config["emby_server"],
+                config["emby_api_key"],
+                user_id,
+                studio_name
+            )
+            if collection:
+                current_collection_id = collection["Id"]
+                log_info(f"[{studio_name}] ✓ 找到合集 ID: {current_collection_id}")
+            else:
+                log_info(f"[{studio_name}] 第 {attempt} 次搜索未找到合集")
+        else:
+            log_info(f"[{studio_name}] 使用已有合集 ID: {current_collection_id}")
 
-        if collection:
-            log_info(f"[{studio_name}] ✓ 找到合集，开始上传...")
+        # 上传（如果有 collection_id）
+        if current_collection_id:
+            log_info(f"[{studio_name}] 开始上传...")
             if upload_studio_to_emby(
                 emby_data=config["emby_data"],
-                collection_id=collection["Id"],
+                collection_id=current_collection_id,
                 emby_server=config["emby_server"],
                 emby_api_key=config["emby_api_key"],
                 user_id=user_id,
@@ -204,7 +213,7 @@ def sync_studio_to_collection(config: Dict[str, Any]) -> str:
                 return f"工作室 {studio_name} 同步完成"
             else:
                 return f"工作室 {studio_name} 上传失败"
-        
+
         # 未找到，等待下一次重试（最后一次不等待）
         if attempt < len(retry_delays):
             log_info(f"[{studio_name}] 未找到合集，等待 {delay} 秒...")
