@@ -57,7 +57,7 @@ def load_settings(stash: StashInterface) -> Dict[str, Any]:
             "emby_api_key": "",
             "worker_delays": "35,70",
             "scheduled_task_id": "",
-            "enable_worker_log": True,
+            "enable_worker_log": False,  # 默认关闭
             "stash_api_key": "",
             "server_connection": {},
         }
@@ -76,7 +76,7 @@ def load_settings(stash: StashInterface) -> Dict[str, Any]:
         "emby_api_key": _get_val("embyApiKey", ""),
         "worker_delays": _get_val("workerDelays", "35,70"),
         "scheduled_task_id": _get_val("scheduledTaskId", ""),
-        "enable_worker_log": bool(_get_val("enableWorkerLog", True)),
+        "enable_worker_log": bool(_get_val("enableWorkerLog", False)),  # 默认关闭
         "parent_ids": _get_val("parentIds", ""),  # 可选：限定媒体库 ID 列表（逗号分隔）
         "stash_api_key": cfg.get("general", {}).get("apiKey") or "",
         "server_connection": {},
