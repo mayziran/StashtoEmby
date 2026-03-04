@@ -10,7 +10,7 @@ settings:
     type: STRING
   exportMode:
     displayName: Task：本地导出模式
-    description: "0-不导出 (默认)，1-覆盖 (图片+NFO)，2-只 NFO，3-只图片，4-补缺"
+    description: "建议关闭本地输出相关功能，功能保留以后不再做兼容。0-不导出，1-覆盖，2-只 NFO，3-只图片，4-补缺"
     type: NUMBER
   uploadMode:
     displayName: Task：Emby 上传模式
