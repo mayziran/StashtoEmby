@@ -177,7 +177,6 @@ def handle_task(stash: Any, settings: Dict[str, Any], task_log_func: Any) -> str
         # 5. 遍历工作室
         for i, studio in enumerate(all_studios):
             studio_name = studio.get("name", "")
-            progress = (i + 1) / total_count
 
             # 名称精确匹配
             collection_id = collection_map.get(studio_name.lower())
