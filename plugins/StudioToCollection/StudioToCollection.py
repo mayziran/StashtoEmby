@@ -82,12 +82,6 @@ def load_settings(stash: StashInterface) -> Dict[str, Any]:
         "server_connection": {},
     }
 
-    log.info(
-        f"[{PLUGIN_ID}] 加载配置：enable_hook={settings['enable_hook']}, "
-        f"emby_server='{settings['emby_server']}', "
-        f"worker_delays='{settings['worker_delays']}', enable_worker_log={settings['enable_worker_log']}"
-    )
-
     return settings
 
 

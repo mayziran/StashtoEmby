@@ -156,7 +156,6 @@ def handle_task(stash: Any, settings: Dict[str, Any], task_log_func: Any) -> str
         if not user_id:
             log.error(f"[{PLUGIN_ID}] 无法获取 Emby 用户 ID")
             return "无法获取 Emby 用户 ID"
-        log.info(f"[{PLUGIN_ID}] 获取到 Emby 用户 ID: {user_id}")
 
         # 3. 获取所有合集，建立名称映射
         log.info(f"[{PLUGIN_ID}] 正在获取 Emby 合集列表...")

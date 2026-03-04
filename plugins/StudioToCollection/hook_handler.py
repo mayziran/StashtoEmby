@@ -55,8 +55,6 @@ def _prepare_sync_data(
         log.error(f"[{PLUGIN_ID}] 无法获取 Emby 用户 ID")
         return None, "无法获取 Emby 用户 ID"
 
-    log.info(f"[{PLUGIN_ID}] 获取到 Emby 用户 ID: {user_id}")
-
     # 构建 Emby 数据
     emby_data = build_emby_data(studio)
 

@@ -292,7 +292,6 @@ def handle_task(
         if not user_id:
             log.error(f"[{PLUGIN_ID}] 无法获取 Emby 用户 ID")
             return "无法获取 Emby 用户 ID"
-        log.info(f"[{PLUGIN_ID}] 获取到 Emby 用户 ID: {user_id}")
 
         # 3. 获取所有合集，建立名称映射
         collections = get_all_collections(

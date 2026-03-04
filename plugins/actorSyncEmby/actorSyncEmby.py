@@ -98,13 +98,6 @@ def load_settings(stash: StashInterface, for_hook: bool = False, for_task: bool 
     enable_worker_log = bool(_get_val("enableWorkerLog", True))
     worker_delays = _get_val("workerDelays", "35,70")
 
-    log.info(
-        f"Loaded settings: actor_output_dir='{actor_output_dir}', "
-        f"export_mode={export_mode} (Task), upload_mode={upload_mode} (Task), "
-        f"hook_mode={hook_mode} (Hook), "
-        f"emby_server='{emby_server}'"
-    )
-
     # 根据调用目的决定加载哪些模块
     local_exporter = None
     emby_uploader = None
