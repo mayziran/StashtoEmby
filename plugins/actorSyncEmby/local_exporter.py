@@ -155,8 +155,7 @@ def export_actor_to_local(
     actor_output_dir: str,
     export_mode: int = 1,
     server_conn: Optional[Dict[str, Any]] = None,
-    stash_api_key: str = "",
-    dry_run: bool = False
+    stash_api_key: str = ""
 ) -> Dict[str, Optional[str]]:
     """
     导出演员数据到本地（简化版）。
@@ -170,7 +169,6 @@ def export_actor_to_local(
             3 = 只导出图片
         server_conn: Stash 服务器连接信息
         stash_api_key: Stash API 密钥
-        dry_run: 是否仅模拟
 
     Returns:
         包含生成文件路径的字典：{"nfo": nfo_path, "image": image_path}
@@ -191,9 +189,7 @@ def export_actor_to_local(
     # 准备目录
     safe_name = safe_segment(name)
     actor_dir = os.path.join(actor_output_dir, safe_name)
-
-    if not dry_run:
-        os.makedirs(actor_dir, exist_ok=True)
+    os.makedirs(actor_dir, exist_ok=True)
 
     image_url = performer.get("image_path")
 

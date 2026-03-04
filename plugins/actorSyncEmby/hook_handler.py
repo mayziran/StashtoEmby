@@ -37,8 +37,7 @@ def _export_local(performer: Dict[str, Any], settings: Dict[str, Any]) -> bool:
             actor_output_dir=settings.get("actor_output_dir", ""),
             export_mode=1,  # 覆盖模式：都导出（NFO+ 图片）
             server_conn=settings.get("server_connection", {}),
-            stash_api_key=settings.get("stash_api_key", ""),
-            dry_run=settings.get("dry_run", False)
+            stash_api_key=settings.get("stash_api_key", "")
         )
         return True
     except Exception as e:

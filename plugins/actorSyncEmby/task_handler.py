@@ -292,8 +292,7 @@ def _process_performer(
                     actor_output_dir=settings.get("actor_output_dir", ""),
                     export_mode=actual_export_mode,
                     server_conn=settings.get("server_connection", {}),
-                    stash_api_key=settings.get("stash_api_key", ""),
-                    dry_run=settings.get("dry_run", False)
+                    stash_api_key=settings.get("stash_api_key", "")
                 )
                 local_success = True
             except Exception as e:

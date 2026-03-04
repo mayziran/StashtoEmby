@@ -76,7 +76,6 @@ def load_settings(stash: StashInterface, for_hook: bool = False, for_task: bool 
             "hook_mode": 0,
             "emby_server": "",
             "emby_api_key": "",
-            "dry_run": False,
             "enable_worker_log": True,
             "local_exporter": None,
             "emby_uploader": None,
@@ -96,7 +95,6 @@ def load_settings(stash: StashInterface, for_hook: bool = False, for_task: bool 
     hook_mode = int(_get_val("hookMode", 0))
     emby_server = _get_val("embyServer", "")
     emby_api_key = _get_val("embyApiKey", "")
-    dry_run = bool(_get_val("dryRun", False))
     enable_worker_log = bool(_get_val("enableWorkerLog", True))
     worker_delays = _get_val("workerDelays", "35,70")
 
@@ -104,7 +102,7 @@ def load_settings(stash: StashInterface, for_hook: bool = False, for_task: bool 
         f"Loaded settings: actor_output_dir='{actor_output_dir}', "
         f"export_mode={export_mode} (Task), upload_mode={upload_mode} (Task), "
         f"hook_mode={hook_mode} (Hook), "
-        f"emby_server='{emby_server}', dry_run={dry_run}"
+        f"emby_server='{emby_server}'"
     )
 
     # 根据调用目的决定加载哪些模块
@@ -166,7 +164,6 @@ def load_settings(stash: StashInterface, for_hook: bool = False, for_task: bool 
         "hook_mode": hook_mode,
         "emby_server": emby_server,
         "emby_api_key": emby_api_key,
-        "dry_run": dry_run,
         "enableWorkerLog": enable_worker_log,
         "workerDelays": worker_delays,
         "local_exporter": local_exporter,
