@@ -105,16 +105,7 @@ def write_actor_nfo(actor_dir: str, performer: Dict[str, Any]) -> Optional[str]:
 def download_actor_image(actor_dir: str, performer: Dict[str, Any],
                          server_conn: Dict[str, Any], stash_api_key: str) -> Optional[str]:
     """
-    下载演员图片到本地。
-
-    Args:
-        actor_dir: 演员目录
-        performer: 演员信息字典
-        server_conn: Stash 服务器连接信息
-        stash_api_key: Stash API 密钥
-
-    Returns:
-        图片文件路径，如果未下载则返回 None
+    下载演员图片到本地（保留原始扩展名）。
     """
     from utils import build_performer_name
 
@@ -123,18 +114,33 @@ def download_actor_image(actor_dir: str, performer: Dict[str, Any],
         log.info("演员没有图片 URL，跳过下载")
         return None
 
-    # 构建完整姓名（包含消歧义）
     name = build_performer_name(performer)
-    dst_path = os.path.join(actor_dir, "folder.jpg")
+
+    # 下载图片
     abs_url = build_absolute_url(image_url, server_conn)
     session = build_requests_session(server_conn, stash_api_key)
 
     try:
         resp = session.get(abs_url, timeout=30)
         if resp.status_code == 200:
+            # 从响应头 Content-Type 获取文件类型
+            content_type = resp.headers.get("Content-Type", "image/jpeg")
+            
+            # 映射到扩展名
+            ext_map = {
+                "image/jpeg": "jpg",
+                "image/png": "png",
+                "image/gif": "gif",
+                "image/webp": "webp",
+                "image/bmp": "bmp",
+            }
+            ext = ext_map.get(content_type.lower(), "jpg")
+            
+            # 保存为 folder.ext
+            dst_path = os.path.join(actor_dir, f"folder.{ext}")
             with open(dst_path, "wb") as f:
                 f.write(resp.content)
-            log.info(f"已下载演员图片：'{name}' -> {dst_path}")
+            log.info(f"已下载演员图片：'{name}' -> {dst_path} (Content-Type: {content_type})")
             return dst_path
         else:
             log.error(f"下载演员图片失败：'{name}'，状态码：{resp.status_code}")
