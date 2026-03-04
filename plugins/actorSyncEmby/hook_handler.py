@@ -133,10 +133,6 @@ def _process_hook_performer(
     performer_name = build_performer_name(performer) or "Unknown"
     hook_mode = settings.get("hook_mode", 3)
 
-    # hook_mode=0：关闭
-    if hook_mode == 0:
-        return "Hook 响应已关闭"
-
     # 执行操作
     is_create = (hook_type == "创建")
     local_ok = False
