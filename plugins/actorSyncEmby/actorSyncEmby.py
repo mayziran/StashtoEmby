@@ -230,13 +230,11 @@ def main():
     args = json_input.get("args") or {}
     hook_ctx = args.get("hookContext")
 
-    # 导入处理器模块
-    from hook_handler import handle_create_hook, handle_update_hook
-    from task_handler import handle_task
-
     try:
         if hook_ctx:
             # ========== Hook 模式：演员创建/更新事件 ==========
+            from hook_handler import handle_create_hook, handle_update_hook
+
             performer_id = int(hook_ctx.get("id", 0))
             hook_type = hook_ctx.get("type", "")
 
@@ -261,13 +259,15 @@ def main():
                 msg = f"未知的 Hook 类型：{hook_type}"
         else:
             # ========== Task 模式：手动执行批量任务 ==========
+            from task_handler import handle_task
+
             log.info(f"[{PLUGIN_ID}] Task 模式：同步所有演员")
-            
+
             # 为 Task 加载模块（只看 export_mode/upload_mode）
             settings = load_settings(stash, for_task=True)
             settings["server_connection"] = server_conn
             settings["stash_api_key"] = stash_api_key
-            
+
             msg = handle_task(stash, settings, task_log)
         
         out = {"output": msg, "progress": 1.0}
