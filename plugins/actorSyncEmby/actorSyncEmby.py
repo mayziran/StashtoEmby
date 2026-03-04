@@ -174,7 +174,7 @@ def load_settings(stash: StashInterface, for_hook: bool = False, for_task: bool 
     }
 
 
-def start_async_worker(performer_id: int, settings: Dict[str, Any]) -> None:
+def start_async_worker(performer: Dict[str, Any], settings: Dict[str, Any]) -> None:
     """启动后台 worker，异步上传演员到 Emby（Create Hook 专用）"""
     worker_script = os.path.join(os.path.dirname(__file__), "actor_sync_worker.py")
 
@@ -186,13 +186,13 @@ def start_async_worker(performer_id: int, settings: Dict[str, Any]) -> None:
         "upload_mode": 1,
         "enable_worker_log": settings.get("enableWorkerLog", True),
         "worker_delays": settings.get("workerDelays", "35,70"),
-        "stash_url": f"http://{settings.get('server_connection', {}).get('Host', 'localhost')}:{settings.get('server_connection', {}).get('Port', '9999')}"
+        "performer": performer  # 直接传递演员数据，避免 Worker 重新获取
     }
 
     config_json = json.dumps(config, ensure_ascii=False)
     config_b64 = base64.b64encode(config_json.encode('utf-8')).decode('ascii')
 
-    cmd = [sys.executable, worker_script, str(performer_id), config_b64]
+    cmd = [sys.executable, worker_script, config_b64]
     log.info(f"[{PLUGIN_ID}] 启动后台工作脚本")
 
     try:

@@ -9,7 +9,7 @@ import json
 import os
 import sys
 import time
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 import requests
 
@@ -61,10 +61,10 @@ def refresh_emby_library(emby_server: str, emby_api_key: str) -> bool:
 def check_actor_exists_in_emby(emby_server: str, emby_api_key: str, actor_name: str) -> bool:
     """检查演员是否存在于 Emby 中"""
     from urllib.parse import quote
-    
+
     encoded_name = quote(actor_name)
     persons_url = f"{emby_server}/emby/Persons/{encoded_name}?api_key={emby_api_key}"
-    
+
     try:
         resp = requests.get(persons_url, timeout=10)
         if resp.status_code == 200:
@@ -83,80 +83,24 @@ def check_actor_exists_in_emby(emby_server: str, emby_api_key: str, actor_name: 
         return False
 
 
-def get_performer_from_stash(stash_url: str, stash_api_key: str, performer_id: str) -> Optional[Dict[str, Any]]:
-    """从 Stash API 获取演员信息（只获取 24 个必要字段，和 Task/Hook 保持一致）"""
-    query = """
-    query FindPerformer($id: ID!) {
-        findPerformer(id: $id) {
-            id
-            name
-            disambiguation
-            urls
-            gender
-            birthdate
-            ethnicity
-            country
-            eye_color
-            height_cm
-            measurements
-            fake_tits
-            penis_length
-            circumcised
-            career_length
-            tattoos
-            piercings
-            alias_list
-            details
-            death_date
-            hair_color
-            weight
-            image_path
-            tags {
-                id
-                name
-            }
-        }
-    }
-    """
-    
-    headers = {"Content-Type": "application/json"}
-    if stash_api_key:
-        headers["ApiKey"] = stash_api_key
-    
-    try:
-        resp = requests.post(
-            f"{stash_url}/graphql",
-            json={"query": query, "variables": {"id": performer_id}},
-            headers=headers,
-            timeout=30
-        )
-        
-        if resp.status_code != 200:
-            log_error(f"从 Stash 获取演员信息失败，状态码：{resp.status_code}")
-            return None
-        
-        result = resp.json()
-        performer = result.get("data", {}).get("findPerformer")
-        
-        if not performer:
-            log_error(f"未找到演员 ID: {performer_id}")
-            return None
-        
-        return performer
-    except Exception as e:
-        log_error(f"从 Stash 获取演员信息失败：{e}")
-        return None
+def build_performer_name(performer: Dict[str, Any]) -> str:
+    """构建演员完整姓名（包含消歧义）"""
+    name = performer.get("name", "")
+    disambiguation = performer.get("disambiguation", "")
+
+    if name and disambiguation:
+        return f"{name} ({disambiguation})"
+    return name
 
 
 def main():
     import base64
 
-    if len(sys.argv) < 3:
-        log_error("用法：python actor_sync_worker.py <performer_id> <config_base64>")
+    if len(sys.argv) < 2:
+        log_error("用法：python actor_sync_worker.py <config_base64>")
         sys.exit(1)
 
-    performer_id = sys.argv[1]
-    config_b64 = sys.argv[2]
+    config_b64 = sys.argv[1]
 
     # 先解码配置，读取 enable_worker_log 设置
     try:
@@ -170,16 +114,25 @@ def main():
     global _enable_worker_log
     _enable_worker_log = config.get("enable_worker_log", True)
 
+    # 直接从配置获取演员数据，不需要重新调用 API
+    performer = config.get("performer")
+    if not performer:
+        log_error("未找到演员数据")
+        sys.exit(1)
+
+    performer_id = performer.get("id", "unknown")
+    actor_name = build_performer_name(performer)
+
     log_info(f"=== 演员同步工作脚本启动 ===")
     log_info(f"演员 ID: {performer_id}")
+    log_info(f"演员：{actor_name}")
 
     emby_server = config.get("emby_server", "").strip()
     emby_api_key = config.get("emby_api_key", "").strip()
     stash_api_key = config.get("stash_api_key", "")
     server_conn = config.get("server_connection", {})
     upload_mode = config.get("upload_mode", 1)  # Hook 固定使用 mode=1（覆盖模式）
-    stash_url = config.get("stash_url", "http://localhost:9999")
-    
+
     # 解析延迟配置（格式："35,70"）
     worker_delays_str = config.get("worker_delays", "35,70")
     try:
@@ -189,24 +142,12 @@ def main():
     except Exception as e:
         log_error(f"解析延迟配置失败：{e}，使用默认值 35,70")
         stash_wait, emby_wait = 35, 70
-    
+
     log_info(f"延迟配置：等待 Stash 更新 {stash_wait}秒，等待 Emby 刷新 {emby_wait}秒")
 
     if not emby_server or not emby_api_key:
         log_error("Emby 服务器地址或 API 密钥未配置")
         sys.exit(1)
-    
-    # 从 Stash 获取演员信息
-    performer = get_performer_from_stash(stash_url, stash_api_key, performer_id)
-    if not performer:
-        sys.exit(1)
-
-    # 构建完整姓名（包含消歧义）
-    actor_name = performer.get("name", "")
-    disambiguation = performer.get("disambiguation", "")
-    if actor_name and disambiguation:
-        actor_name = f"{actor_name} ({disambiguation})"
-    log_info(f"获取到演员信息：{actor_name}")
 
     # 阶段 1: 等待
     log_info(f"【阶段 1/4】等待 Stash 更新演员影片信息 ({stash_wait}秒)...")
@@ -222,13 +163,13 @@ def main():
 
     # 阶段 4: 上传演员信息（带重试）
     log_info("【阶段 4/4】上传演员信息到 Emby...")
-    
+
     retry_delays = [30, 60, 90]
     max_attempts = len(retry_delays) + 1
-    
+
     for attempt in range(max_attempts):
         log_info(f"尝试上传 (第 {attempt + 1}/{max_attempts} 次)...")
-        
+
         # 检查演员是否存在于 Emby
         if not check_actor_exists_in_emby(emby_server, emby_api_key, actor_name):
             log_info(f"演员 {actor_name} 在 Emby 中不存在")
@@ -240,12 +181,12 @@ def main():
             else:
                 log_error(f"已达到最大重试次数，演员 {actor_name} 仍未在 Emby 中出现")
                 sys.exit(1)
-        
+
         # 执行上传（使用 emby_uploader 模块）
         try:
             sys.path.insert(0, os.path.dirname(__file__))
             from emby_uploader import upload_actor_to_emby
-            
+
             upload_actor_to_emby(
                 performer=performer,
                 emby_server=emby_server,

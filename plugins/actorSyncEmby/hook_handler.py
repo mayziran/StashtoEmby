@@ -46,7 +46,7 @@ def _export_local(performer: Dict[str, Any], settings: Dict[str, Any]) -> bool:
         return False
 
 
-def _start_emby_async(performer_id: int, settings: Dict[str, Any]) -> bool:
+def _start_emby_async(performer: Dict[str, Any], settings: Dict[str, Any]) -> bool:
     """
     启动 Emby 异步上传（通过 worker 延迟执行）
 
@@ -63,7 +63,7 @@ def _start_emby_async(performer_id: int, settings: Dict[str, Any]) -> bool:
     try:
         upload_settings = dict(settings)
         upload_settings["upload_mode"] = 1  # 覆盖模式：都上传（图片 + 元数据）
-        start_async_worker(performer_id, upload_settings)
+        start_async_worker(performer, upload_settings)
         return True
     except Exception as e:
         log.error(f"启动 Emby 异步上传失败：{e}")
@@ -151,7 +151,7 @@ def _process_hook_performer(
     # hook_mode=2：只 Emby
     elif hook_mode == 2:
         if is_create:
-            emby_ok = _start_emby_async(performer_id, settings)
+            emby_ok = _start_emby_async(performer, settings)
             msg = f"演员 {performer_name} {hook_type}成功，已启动异步上传 Emby"
         else:
             emby_ok = _upload_emby_sync(performer, settings)
@@ -161,7 +161,7 @@ def _process_hook_performer(
     elif hook_mode == 3:
         local_ok = _export_local(performer, settings)
         if is_create:
-            emby_ok = _start_emby_async(performer_id, settings)
+            emby_ok = _start_emby_async(performer, settings)
             msg = f"演员 {performer_name} {hook_type}成功，已导出本地并启动异步上传 Emby"
         else:
             emby_ok = _upload_emby_sync(performer, settings)
