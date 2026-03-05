@@ -1,7 +1,7 @@
 """
 StudioToCollection 插件主入口
 
-版本：1.3.2
+版本：1.3.3
 
 架构:
     1. 判断模式（Hook / Task）
