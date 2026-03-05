@@ -125,7 +125,7 @@ def download_actor_image(actor_dir: str, performer: Dict[str, Any],
         if resp.status_code == 200:
             # 从响应头 Content-Type 获取文件类型
             content_type = resp.headers.get("Content-Type", "image/jpeg")
-            
+
             # 映射到扩展名
             ext_map = {
                 "image/jpeg": "jpg",
@@ -135,9 +135,22 @@ def download_actor_image(actor_dir: str, performer: Dict[str, Any],
                 "image/bmp": "bmp",
             }
             ext = ext_map.get(content_type.lower(), "jpg")
-            
+
             # 保存为 folder.ext
             dst_path = os.path.join(actor_dir, f"folder.{ext}")
+            
+            # 删除旧的 folder.* 文件（如果扩展名变了）
+            if os.path.exists(actor_dir):
+                for f in os.listdir(actor_dir):
+                    if f.lower().startswith("folder."):
+                        old_path = os.path.join(actor_dir, f)
+                        if old_path != dst_path:
+                            try:
+                                os.remove(old_path)
+                                log.info(f"删除旧图片：{f}")
+                            except Exception as e:
+                                log.warning(f"删除旧图片失败：{f} - {e}")
+            
             with open(dst_path, "wb") as f:
                 f.write(resp.content)
             log.info(f"已下载演员图片：'{name}' -> {dst_path} (Content-Type: {content_type})")

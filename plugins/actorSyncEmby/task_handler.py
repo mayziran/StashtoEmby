@@ -31,10 +31,6 @@ def _check_local_missing_batch(performer_names: list, actor_output_dir: str) -> 
     """
     批量检查演员本地文件是否缺失（只读取一次磁盘目录）。
 
-    Args:
-        performer_names: 演员名称列表
-        actor_output_dir: 演员输出根目录
-
     Returns:
         {演员名：{"need_nfo": bool, "need_image": bool}}
     """
@@ -53,9 +49,13 @@ def _check_local_missing_batch(performer_names: list, actor_output_dir: str) -> 
                 actor_dir = os.path.join(actor_output_dir, dir_name)
                 if os.path.isdir(actor_dir):
                     files = os.listdir(actor_dir)
+                    # 检查 NFO
+                    has_nfo = "actor.nfo" in files
+                    # 检查图片：folder.{ext} 格式（支持 jpg/png/webp/bmp/gif）
+                    has_image = any(f.lower().startswith("folder.") for f in files)
                     existing_dirs[dir_name] = {
-                        "has_nfo": "actor.nfo" in files,
-                        "has_image": any(f in files for f in ["folder.jpg", "poster.jpg"])
+                        "has_nfo": has_nfo,
+                        "has_image": has_image
                     }
         except Exception as e:
             log.error(f"读取本地目录失败：{e}")
