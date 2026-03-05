@@ -145,11 +145,7 @@ def download_actor_image(actor_dir: str, performer: Dict[str, Any],
                     if f.lower().startswith("folder."):
                         old_path = os.path.join(actor_dir, f)
                         if old_path != dst_path:
-                            try:
-                                os.remove(old_path)
-                                log.info(f"删除旧图片：{f}")
-                            except Exception as e:
-                                log.warning(f"删除旧图片失败：{f} - {e}")
+                            os.remove(old_path)
             
             with open(dst_path, "wb") as f:
                 f.write(resp.content)
