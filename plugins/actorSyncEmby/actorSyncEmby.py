@@ -56,14 +56,16 @@ def connect_stash(server_connection: Dict[str, Any]) -> StashInterface:
     return StashInterface(server_connection)
 
 
-def load_settings(stash: StashInterface, for_hook: bool = False, for_task: bool = False) -> Dict[str, Any]:
+
+def load_settings(stash: StashInterface, for_hook: bool = False, for_task: bool = False, task_mode: str = "task_local") -> Dict[str, Any]:
     """
     从 Stash 配置里读取本插件的 settings，并根据模式导入对应模块。
-    
+
     Args:
         stash: Stash 接口
         for_hook: 是否为 Hook 模式加载（只根据 hook_mode 判断）
-        for_task: 是否为 Task 模式加载（只根据 export_mode/upload_mode 判断）
+        for_task: 是否为 Task 模式加载（只根据 task_mode 判断）
+        task_mode: Task 模式标识（task_local/task_emby）
     """
     try:
         cfg = stash.get_configuration()
@@ -125,29 +127,36 @@ def load_settings(stash: StashInterface, for_hook: bool = False, for_task: bool 
                 log.error(f"加载 emby_uploader 失败：{e}")
 
     elif for_task:
-        # ========== Task 模式：只看 export_mode/upload_mode ==========
-        # export_mode/upload_mode: 0=不执行，1-3=覆盖/只 NFO/只图片，4=补缺
-        need_local = (export_mode != 0)
-        need_emby = (upload_mode != 0)
-
-        if need_local:
-            try:
-                from local_exporter import export_actor_to_local as local_export
-                local_exporter = {"export_actor_to_local": local_export}
-                log.info(f"[{PLUGIN_ID}] 已加载 local_exporter (Task)")
-            except Exception as e:
-                log.error(f"加载 local_exporter 失败：{e}")
-
-        if need_emby:
-            try:
-                from emby_uploader import upload_actor_to_emby as emby_upload
-                emby_uploader = {"upload_actor_to_emby": emby_upload}
-                log.info(f"[{PLUGIN_ID}] 已加载 emby_uploader (Task)")
-            except Exception as e:
-                log.error(f"加载 emby_uploader 失败：{e}")
+        # ========== Task 模式：根据传入的 task_mode 决定加载哪个模块 ==========
+        # task_local: 只加载 local_exporter（如果 export_mode != 0）
+        # task_emby: 只加载 emby_uploader（如果 upload_mode != 0）
+        if task_mode in ("task_local", "local"):
+            # 只加载本地导出模块（如果 export_mode != 0）
+            if export_mode != 0:
+                try:
+                    from local_exporter import export_actor_to_local as local_export
+                    local_exporter = {"export_actor_to_local": local_export}
+                except Exception as e:
+                    log.error(f"加载 local_exporter 失败：{e}")
+            else:
+                log.info(f"[{PLUGIN_ID}] export_mode=0，不加载 local_exporter")
+        
+        elif task_mode in ("task_emby", "emby"):
+            # 只加载 Emby 上传模块（如果 upload_mode != 0）
+            if upload_mode != 0:
+                try:
+                    from emby_uploader import upload_actor_to_emby as emby_upload
+                    emby_uploader = {"upload_actor_to_emby": emby_upload}
+                except Exception as e:
+                    log.error(f"加载 emby_uploader 失败：{e}")
+            else:
+                log.info(f"[{PLUGIN_ID}] upload_mode=0，不加载 emby_uploader")
 
     # 日志：模块加载情况
-    if local_exporter is None and emby_uploader is None:
+    # hook_mode=0 时不警告（用户故意关闭 Hook）
+    if for_hook and hook_mode == 0:
+        pass  # 正常关闭，不警告
+    elif local_exporter is None and emby_uploader is None:
         log.warning(f"[{PLUGIN_ID}] 警告：没有加载任何模块（export_mode={export_mode}, upload_mode={upload_mode}, hook_mode={hook_mode}）")
 
     return {
@@ -219,6 +228,12 @@ def main():
         log.error(f"[{PLUGIN_ID}] 获取 stash 配置失败：{e}")
         stash_api_key = ""
 
+    # 没有 API key 直接拒绝执行
+    if not stash_api_key:
+        out = {"error": "未获取到 Stash API key，请检查 Stash 配置"}
+        print(json.dumps(out) + "\n")
+        return
+
     # 判断运行模式：直接从 Task 或 Hook 触发
     args = json_input.get("args") or {}
     hook_ctx = args.get("hookContext")
@@ -252,16 +267,20 @@ def main():
                 msg = f"未知的 Hook 类型：{hook_type}"
         else:
             # ========== Task 模式：手动执行批量任务 ==========
-            from task_handler import handle_task
+            from task_handler import task_local, task_emby
 
-            log.info(f"[{PLUGIN_ID}] Task 模式：同步所有演员")
+            # 根据 mode 参数决定执行哪个 Task（由 YML 的 defaultArgs 决定）
+            mode = args.get("mode", "task_local")
 
-            # 为 Task 加载模块（只看 export_mode/upload_mode）
-            settings = load_settings(stash, for_task=True)
+            # 为 Task 加载模块（只加载对应模块）
+            settings = load_settings(stash, for_task=True, task_mode=mode)
             settings["server_connection"] = server_conn
             settings["stash_api_key"] = stash_api_key
 
-            msg = handle_task(stash, settings, task_log)
+            if mode == "task_local":
+                msg = task_local(stash, settings, task_log)
+            elif mode == "task_emby":
+                msg = task_emby(stash, settings, task_log)
         
         out = {"output": msg, "progress": 1.0}
     except Exception as e:

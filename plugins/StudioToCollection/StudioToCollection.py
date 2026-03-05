@@ -146,6 +146,11 @@ def main():
     settings = load_settings(stash)
     settings["server_connection"] = server_conn
 
+    # 没有 API key 直接拒绝执行
+    if not settings.get("stash_api_key"):
+        print(json.dumps({"error": "未获取到 Stash API key，请检查 Stash 配置"}) + "\n")
+        return
+
     args = json_input.get("args") or {}
     hook_ctx = args.get("hookContext")
 
