@@ -299,13 +299,14 @@ def task_local(
         page_total = len(page_performers)
         total_actors += len(page_performers)
 
-        # 补缺模式：批量检查缺失（只检查第一页）
-        if use_batch_check and local_exporter and not local_cache:
+        # 补缺模式：批量检查缺失（每页都检查）
+        if use_batch_check and local_exporter:
             # 使用完整姓名（包含消歧义），与本地目录名匹配
             performer_names = [build_performer_name(p) for p in page_performers if p.get("name")]
-            local_cache = _check_local_missing_batch(performer_names, settings.get("actor_output_dir", ""))
-            check_count = sum(1 for v in local_cache.values() if v['need_nfo'] or v['need_image'])
-            log.info(f"[{PLUGIN_ID}] 本地缺失检查：{check_count} 位演员需要处理")
+            page_cache = _check_local_missing_batch(performer_names, settings.get("actor_output_dir", ""))
+            local_cache.update(page_cache)  # 合并到总缓存
+            check_count = sum(1 for v in page_cache.values() if v['need_nfo'] or v['need_image'])
+            log.info(f"[{PLUGIN_ID}] 第{page}页缺失检查：{check_count} 位演员需要处理")
 
         # 补缺模式：筛选需要处理的演员
         if use_batch_check:
@@ -478,17 +479,18 @@ def task_emby(
         page_total = len(page_performers)
         total_actors += len(page_performers)
 
-        # 补缺模式：批量检查缺失（只检查第一页）
-        if use_batch_check and emby_uploader and not emby_cache:
+        # 补缺模式：批量检查缺失（每页都检查）
+        if use_batch_check and emby_uploader:
             # 使用完整姓名（包含消歧义），与后续判断时的 key 一致
             performer_names = [build_performer_name(p) for p in page_performers if p.get("name")]
-            emby_cache = _check_emby_missing_batch(
+            page_cache = _check_emby_missing_batch(
                 performer_names,
                 settings.get("emby_server", ""),
                 settings.get("emby_api_key", "")
             )
-            check_count = sum(1 for v in emby_cache.values() if v['need_image'] or v['need_metadata'])
-            log.info(f"[{PLUGIN_ID}] Emby 缺失检查：{check_count} 位演员需要处理")
+            emby_cache.update(page_cache)  # 合并到总缓存
+            check_count = sum(1 for v in page_cache.values() if v['need_image'] or v['need_metadata'])
+            log.info(f"[{PLUGIN_ID}] 第{page}页缺失检查：{check_count} 位演员需要处理")
 
         # 补缺模式：筛选需要处理的演员
         if use_batch_check:
