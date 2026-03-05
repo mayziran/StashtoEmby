@@ -44,13 +44,13 @@ interface: raw
 errLog: info
 
 tasks:
-  - name: task_local
-    description: "导出演员 NFO 和图片到本地目录"
+  - name: 导出演员到本地
+    description: "手动执行：导出演员 NFO 和图片到本地目录"
     defaultArgs:
       mode: "task_local"
 
-  - name: task_emby
-    description: "上传演员图片和元数据到 Emby"
+  - name: 上传演员到 Emby
+    description: "手动执行：上传演员图片和元数据到 Emby 服务器"
     defaultArgs:
       mode: "task_emby"
 
