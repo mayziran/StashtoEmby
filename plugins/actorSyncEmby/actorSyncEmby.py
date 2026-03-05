@@ -1,7 +1,7 @@
 """
 演员同步插件 - 将 Stash 演员信息同步到本地和 Emby
 
-版本：1.1.1
+版本：1.1.2
 """
 
 import json
@@ -57,7 +57,7 @@ def connect_stash(server_connection: Dict[str, Any]) -> StashInterface:
 
 
 
-def load_settings(stash: StashInterface, for_hook: bool = False, for_task: bool = False, task_mode: str = "task_local") -> Dict[str, Any]:
+def load_settings(stash: StashInterface, for_hook: bool = False, for_task: bool = False, task_mode: str = "task_local", stash_api_key: str = "") -> Dict[str, Any]:
     """
     从 Stash 配置里读取本插件的 settings，并根据模式导入对应模块。
 
@@ -66,6 +66,7 @@ def load_settings(stash: StashInterface, for_hook: bool = False, for_task: bool 
         for_hook: 是否为 Hook 模式加载（只根据 hook_mode 判断）
         for_task: 是否为 Task 模式加载（只根据 task_mode 判断）
         task_mode: Task 模式标识（task_local/task_emby）
+        stash_api_key: Stash API 密钥（可选）
     """
     try:
         cfg = stash.get_configuration()
@@ -170,6 +171,7 @@ def load_settings(stash: StashInterface, for_hook: bool = False, for_task: bool 
         "workerDelays": worker_delays,
         "local_exporter": local_exporter,
         "emby_uploader": emby_uploader,
+        "stash_api_key": stash_api_key,  # 添加 stash_api_key
     }
 
 
@@ -247,9 +249,8 @@ def main():
             hook_type = hook_ctx.get("type", "")
 
             # 为 Hook 加载模块（只看 hook_mode）
-            settings = load_settings(stash, for_hook=True)
+            settings = load_settings(stash, for_hook=True, stash_api_key=stash_api_key)
             settings["server_connection"] = server_conn
-            settings["stash_api_key"] = stash_api_key
 
             hook_mode = settings.get("hook_mode", 0)
 
@@ -273,9 +274,8 @@ def main():
             mode = args.get("mode", "task_local")
 
             # 为 Task 加载模块（只加载对应模块）
-            settings = load_settings(stash, for_task=True, task_mode=mode)
+            settings = load_settings(stash, for_task=True, task_mode=mode, stash_api_key=stash_api_key)
             settings["server_connection"] = server_conn
-            settings["stash_api_key"] = stash_api_key
 
             if mode == "task_local":
                 msg = task_local(stash, settings, task_log)
