@@ -164,30 +164,6 @@ def load_settings(stash: StashInterface) -> Dict[str, Any]:
     }
 
 
-def build_absolute_url(url: str, settings: Dict[str, Any]) -> str:
-    """
-    把相对路径补全为带协议/主机的绝对 URL，方便下载图片。
-    """
-    if not url:
-        return url
-    if url.startswith("http://") or url.startswith("https://"):
-        return url
-
-    server_conn = settings.get("server_connection") or {}
-    scheme = server_conn.get("Scheme", "http")
-    host = server_conn.get("Host", "localhost")
-    port = server_conn.get("Port")
-
-    base = f"{scheme}://{host}"
-    if port:
-        base = f"{base}:{port}"
-
-    if not url.startswith("/"):
-        url = "/" + url
-
-    return base + url
-
-
 def main():
     """插件主入口"""
     json_input = read_input()  # 插件运行时从 stdin 读
