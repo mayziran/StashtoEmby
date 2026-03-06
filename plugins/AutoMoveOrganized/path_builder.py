@@ -298,11 +298,18 @@ def _handle_source_mapping_logic(file_path: str, source_base_dir: str, target_ba
     """
     处理源目录映射逻辑
     """
-    # 计算相对于源基础目录的路径
-    rel_path_from_base = os.path.relpath(file_path, source_base_dir)
+    # 计算相对于源基础目录的路径（使用 / 格式）
+    # Stash 路径永远是 / 格式，直接字符串操作
+    if file_path.startswith(source_base_dir + '/'):
+        rel_path_from_base = file_path[len(source_base_dir):].lstrip('/')
+    elif file_path == source_base_dir:
+        rel_path_from_base = ''
+    else:
+        # 理论上不应该到这里，因为调用前已经检查过
+        rel_path_from_base = file_path
 
     # 获取第一级子目录（如果存在）
-    rel_parts = rel_path_from_base.split(os.sep)
+    rel_parts = rel_path_from_base.split('/')
     first_level_dir = rel_parts[0] if rel_parts and rel_parts[0] else ""
 
     # 使用模板生成文件名部分
@@ -311,9 +318,9 @@ def _handle_source_mapping_logic(file_path: str, source_base_dir: str, target_ba
     # 应用模板并添加后缀
     filename_clean = _apply_template_and_suffix(template, scene, file_path, file_obj, settings)
 
-    # 组合最终路径：目标基础目录 + 第一级子目录 + 文件名
-    abs_target = os.path.join(target_base_dir, first_level_dir, filename_clean)
-    return os.path.normpath(abs_target)
+    # 组合最终路径：直接使用 / 拼接
+    abs_target = f"{target_base_dir}/{first_level_dir}/{filename_clean}" if first_level_dir else f"{target_base_dir}/{filename_clean}"
+    return abs_target
 
 
 def _handle_target_mapping_logic(file_path: str, target_base_dir: str,
@@ -321,9 +328,15 @@ def _handle_target_mapping_logic(file_path: str, target_base_dir: str,
     """
     处理目标目录映射逻辑
     """
-    # 计算相对于目标基础目录的路径，获取第一级子目录
-    rel_path_from_base = os.path.relpath(file_path, target_base_dir)
-    rel_parts = rel_path_from_base.split(os.sep)
+    # 计算相对于目标基础目录的路径（使用 / 格式）
+    if file_path.startswith(target_base_dir + '/'):
+        rel_path_from_base = file_path[len(target_base_dir):].lstrip('/')
+    elif file_path == target_base_dir:
+        rel_path_from_base = ''
+    else:
+        rel_path_from_base = file_path
+
+    rel_parts = rel_path_from_base.split('/')
     first_level_dir = rel_parts[0] if rel_parts and rel_parts[0] else ""
 
     # 使用模板生成文件名部分
@@ -332,9 +345,9 @@ def _handle_target_mapping_logic(file_path: str, target_base_dir: str,
     # 应用模板并添加后缀
     filename_clean = _apply_template_and_suffix(template, scene, file_path, file_obj, settings)
 
-    # 组合最终路径：目标基础目录 + 第一级子目录 + 文件名
-    abs_target = os.path.join(target_base_dir, first_level_dir, filename_clean)
-    return os.path.normpath(abs_target)
+    # 组合最终路径：直接使用 / 拼接
+    abs_target = f"{target_base_dir}/{first_level_dir}/{filename_clean}" if first_level_dir else f"{target_base_dir}/{filename_clean}"
+    return abs_target
 
 
 def _handle_no_mapping_case(scene: Dict[str, Any], file_path: str, file_obj: Dict[str, Any], settings: Dict[str, Any]) -> str:
@@ -398,16 +411,16 @@ def build_target_path(
         if mapping_result:
             source_base_dir, target_base_dir = mapping_result
 
-            # 规范化路径分隔符
-            normalized_source_base = os.path.normpath(source_base_dir)
-            normalized_target_base = os.path.normpath(target_base_dir)
-            normalized_file_path = os.path.normpath(file_path)
+            # 使用正则表达式匹配（与 scene_fetcher.py 一致）
+            # Stash 返回的路径永远是 / 格式，直接用 / 匹配
+            escaped_source = re.escape(source_base_dir)
+            escaped_target = re.escape(target_base_dir)
 
-            # 检查文件路径是否以源基础目录开头（源目录文件）
-            if normalized_file_path.startswith(normalized_source_base + os.sep) or normalized_file_path == normalized_source_base:
+            # 检查文件路径是否在源目录下（源目录文件）
+            if re.match(f"^({escaped_source})(/.*|$)", file_path):
                 return _handle_source_mapping_logic(file_path, source_base_dir, target_base_dir, scene, file_obj, settings)
-            # 检查文件路径是否以目标基础目录开头（目标目录文件）
-            elif normalized_file_path.startswith(normalized_target_base + os.sep) or normalized_file_path == normalized_target_base:
+            # 检查文件路径是否在目标目录下（目标目录文件）
+            elif re.match(f"^({escaped_target})(/.*|$)", file_path):
                 return _handle_target_mapping_logic(file_path, target_base_dir, scene, file_obj, settings)
             else:
                 # 文件既不在源目录也不在目标目录，使用标准路径构建逻辑
@@ -437,15 +450,15 @@ def build_target_path_for_existing_file(file_path: str, scene: Dict[str, Any], f
                 target_base_dir = parts[1].strip()
 
                 if target_base_dir:
-                    # 获取当前文件在目标目录下的一级子目录
-                    normalized_target_base = os.path.normpath(target_base_dir)
-                    normalized_file_path = os.path.normpath(file_path)
+                    # 使用正则表达式匹配（Stash 路径永远是 / 格式）
+                    escaped_target = re.escape(target_base_dir)
 
                     # 检查文件是否在目标目录下
-                    if normalized_file_path.startswith(normalized_target_base + os.sep):
+                    if re.match(f"^({escaped_target})(/.*|$)", file_path):
                         # 计算相对于目标基础目录的路径，获取第一级子目录
-                        rel_path_from_base = os.path.relpath(file_path, normalized_target_base)
-                        rel_parts = rel_path_from_base.split(os.sep)
+                        # 直接使用 / 分割（Stash 路径格式）
+                        rel_path_from_base = file_path[len(target_base_dir):].lstrip('/')
+                        rel_parts = rel_path_from_base.split('/')
                         first_level_dir = rel_parts[0] if rel_parts and rel_parts[0] else ""
 
                         # 使用模板生成文件名部分（不包含路径）
@@ -482,8 +495,9 @@ def build_target_path_for_existing_file(file_path: str, scene: Dict[str, Any], f
                         filename_clean = apply_multi_file_suffix(filename_clean, scene, file_obj, settings)
 
                         # 组合最终路径：目标基础目录 + 第一级子目录 + 文件名
-                        abs_target = os.path.join(target_base_dir, first_level_dir, filename_clean)
-                        return os.path.normpath(abs_target)
+                        # 直接使用 / 拼接（Stash 路径格式）
+                        abs_target = f"{target_base_dir}/{first_level_dir}/{filename_clean}"
+                        return abs_target
                     else:
                         # 如果文件不在目标目录下，这可能是因为：
                         # 1. 这是同一场景的另一个文件，位于源目录

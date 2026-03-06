@@ -11,6 +11,7 @@ file_mover.py - 文件移动模块
 """
 
 import os
+import re
 import shutil
 from typing import Any, Dict
 
@@ -188,21 +189,22 @@ def should_clean_directory(original_dir: str, settings: Dict[str, Any]) -> bool:
     if not target_root:
         return False
 
-    normalized_original_dir = os.path.normpath(original_dir)
-    normalized_target_root = os.path.normpath(target_root)
-    return normalized_original_dir.startswith(normalized_target_root + os.sep)
+    # 使用正则表达式匹配（与 scene_fetcher.py 一致）
+    escaped_target = re.escape(target_root)
+    return bool(re.match(f"^({escaped_target})(/.*|$)", original_dir))
 
 
-def _clean_up_to_stop_directory(normalized_dir: str, normalized_source: str, first_subdir: str) -> None:
+def _clean_up_to_stop_directory(dir_path: str, source: str, first_subdir: str) -> None:
     """
     从指定目录向上清理空目录，直到停止目录
+    参数路径格式：Stash 路径格式（/ 分隔符）
     """
     # 计算停止清理的目录
-    stop_dir = os.path.join(normalized_source, first_subdir)
+    stop_dir = f"{source}/{first_subdir}"
 
     # 从当前目录向上清理，但不超过停止目录
-    current = normalized_dir
-    while current != stop_dir and os.path.dirname(current) != current:
+    current = dir_path
+    while current != stop_dir and current.count('/') > source.count('/'):
         if os.path.isdir(current) and not os.listdir(current):
             os.rmdir(current)
             log.info(f"Removed empty directory: {current}")
@@ -226,20 +228,20 @@ def _handle_mapped_directory_cleanup(directory: str, source_target_mapping: str)
         if len(parts) == 2:
             source_base_dir = parts[0].strip()
             if source_base_dir:
-                normalized_source = os.path.normpath(source_base_dir)
-                normalized_dir = os.path.normpath(directory)
-
-                # 检查目录是否在源基础目录下
-                if normalized_dir.startswith(normalized_source + os.sep):
+                # 使用正则表达式匹配（Stash 路径永远是 / 格式）
+                escaped_source = re.escape(source_base_dir)
+                if re.match(f"^({escaped_source})(/.*|$)", directory):
                     # 获取相对于源目录的第一级子目录
-                    rel_path = os.path.relpath(normalized_dir, normalized_source)
-                    first_subdir = rel_path.split(os.sep)[0] if rel_path else ""
+                    # 使用 / 分割路径（Stash 路径格式）
+                    rel_path = directory[len(source_base_dir):].lstrip('/')
+                    first_subdir = rel_path.split('/')[0] if rel_path else ""
 
                     # 如果是源基础目录本身，跳过清理
                     if not first_subdir:
                         return True
 
-                    _clean_up_to_stop_directory(normalized_dir, normalized_source, first_subdir)
+                    # 传递原始路径（/ 格式）
+                    _clean_up_to_stop_directory(directory, source_base_dir, first_subdir)
                     return True
     return False
 
@@ -253,10 +255,10 @@ def _handle_unmapped_directory_cleanup(directory: str, base_path: str, is_moving
         log.debug(f"Skip cleaning for file moved from outside target directory: {directory}")
         return
 
-    # 通用清理逻辑：从当前目录向上清理到 base_path
-    dir_path = os.path.normpath(directory)
-    current = dir_path
-    while current != base_path and os.path.dirname(current) != current:
+    # 通用清理逻辑：从当前目录向上清理到 base_path（直接使用 / 格式）
+    # Stash 路径永远是 / 格式，不需要 normpath
+    current = directory
+    while current != base_path and current.count('/') > base_path.count('/'):
         if os.path.isdir(current) and not os.listdir(current):
             os.rmdir(current)
             log.info(f"Removed empty directory: {current}")
@@ -523,12 +525,10 @@ def is_file_in_target_location(file_path: str, scene: Dict[str, Any], file_obj: 
         if not target_root:
             return False
 
-        # 规范化路径
-        normalized_current = os.path.normpath(file_path)
-        normalized_target_root = os.path.normpath(target_root)
-
-        # 检查当前路径是否在目标根目录下
-        return normalized_current.startswith(normalized_target_root + os.sep) or normalized_current == normalized_target_root
+        # 使用正则表达式匹配（与 scene_fetcher.py 一致）
+        # Stash 返回的路径永远是 / 格式，直接用 / 匹配
+        escaped_target = re.escape(target_root)
+        return bool(re.match(f"^({escaped_target})(/.*|$)", file_path))
     except Exception:
         # 如果计算失败，假设不在目标位置
         return False

@@ -11,6 +11,7 @@ hook_handler.py - Hook 模式处理模块
 
 import json
 import os
+import re
 import sys
 from typing import Any, Dict
 
@@ -109,15 +110,16 @@ def handle_hook(stash: StashInterface, scene_id: int, settings: Dict[str, Any]) 
                 source_base_dir = parts[0].strip()
                 target_base_dir = parts[1].strip()
                 if source_base_dir and target_base_dir:
-                    normalized_source_base = os.path.normpath(source_base_dir)
-                    normalized_target_base = os.path.normpath(target_base_dir)
-                    normalized_file_path = os.path.normpath(file_path)
-
+                    # 使用正则表达式匹配（与 scene_fetcher.py 一致）
+                    # Stash 返回的路径永远是 / 格式，直接用 / 匹配
+                    escaped_source = re.escape(source_base_dir)
+                    escaped_target = re.escape(target_base_dir)
+                    
                     # 检查文件是否在源目录
-                    if normalized_file_path.startswith(normalized_source_base + os.sep):
+                    if re.match(f"^({escaped_source})(/.*|$)", file_path):
                         files_needing_processing.append(file_obj)
                     # 检查文件是否在目标目录
-                    elif normalized_file_path.startswith(normalized_target_base + os.sep):
+                    elif re.match(f"^({escaped_target})(/.*|$)", file_path):
                         files_already_in_target.append(file_obj)
                     else:
                         # 文件既不在源目录也不在目标目录，跳过处理
@@ -167,10 +169,8 @@ def handle_hook(stash: StashInterface, scene_id: int, settings: Dict[str, Any]) 
             # 对于已经在目标目录的文件，使用专门的函数计算目标路径
             try:
                 current_target_path = build_target_path_for_existing_file(file_path, scene, file_obj, settings)
-                normalized_current = os.path.normpath(file_path)
-                normalized_target = os.path.normpath(current_target_path)
-
-                if normalized_current != normalized_target:
+                # 直接比较字符串（Stash 路径永远是 / 格式）
+                if file_path != current_target_path:
                     # 需要移动到新路径
                     new_moved = regenerate_file_at_target(file_obj, scene, settings)
                     if new_moved:
