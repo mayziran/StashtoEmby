@@ -391,8 +391,12 @@ def write_nfo_for_scene(video_path: str, scene: Dict[str, Any], settings: Dict[s
     nfo_path = os.path.splitext(video_path)[0] + ".nfo"
 
     if settings.get("dry_run"):
+        try:
+            xml_str = ET.tostring(root, encoding="unicode")
+        except Exception:
+            xml_str = "<movie>...</movie>"
         log.info(f"[dry_run] Would write NFO for scene {vars_map.get('id')} -> {nfo_path}")
-        # 不输出完整 XML 内容（避免日志过长和潜在的信息泄露）
+        log.info(xml_str)
         return
 
     tree = ET.ElementTree(root)
