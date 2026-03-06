@@ -114,7 +114,6 @@ SCENE_FRAGMENT = """
           gender
           favorite
           image_path
-          gender
           birthdate
           country
           eye_color
