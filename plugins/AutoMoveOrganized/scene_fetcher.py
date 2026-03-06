@@ -145,12 +145,10 @@ def get_single_scene(stash: StashInterface, scene_id: int) -> Dict[str, Any] | N
 
 def get_all_scenes(stash: StashInterface, settings: Dict[str, Any], per_page: int = 1000) -> List[Dict[str, Any]]:
     """
-    使用 stash.find_scenes 分页把所有 scenes 一次性拉成一个 list 返回，
-    方便在 IDE 里直接看变量调试。
+    获取场景列表（最多 per_page 个，默认 1000）
+    
+    不再循环分页，每次运行最多处理 1000 个场景，避免内存占用过大
     """
-    all_scenes: List[Dict[str, Any]] = []
-    page = 1
-
     fragment = SCENE_FRAGMENT
 
     # 检查是否设置了源目录映射
@@ -189,12 +187,12 @@ def get_all_scenes(stash: StashInterface, settings: Dict[str, Any], per_page: in
     # 构建查询过滤条件
     # 根据 move_only_organized 配置决定是否过滤 organized
     move_only_organized = settings.get("move_only_organized", True)
-    
+
     query_filter = {
-        "page": page,
+        "page": 1,
         "per_page": per_page,
     }
-    
+
     # 只有当 move_only_organized=true 时才在 API 层面过滤 organized
     # 使用 f 参数（SceneFilterType）而不是 filter 参数
     if move_only_organized:
@@ -208,28 +206,16 @@ def get_all_scenes(stash: StashInterface, settings: Dict[str, Any], per_page: in
     else:
         log.info(f"[{PLUGIN_ID}] move_only_organized=false, fetching all scenes")
 
-    while True:
-        log.info(f"[{PLUGIN_ID}] Fetching scenes page={page}, per_page={per_page}")
-        if query_f:
-            log.info(f"[{PLUGIN_ID}] Using path filter: {query_f}")
+    # 只调用一次 API，获取一页数据（最多 per_page 个场景）
+    log.info(f"[{PLUGIN_ID}] Fetching scenes (max {per_page})")
+    if query_f:
+        log.info(f"[{PLUGIN_ID}] Using path filter: {query_f}")
 
-        page_scenes = stash.find_scenes(
-            f=query_f,  # 使用 f 参数传递过滤条件
-            filter=query_filter,
-            fragment=fragment,
-        )
+    scenes = stash.find_scenes(
+        f=query_f,  # 使用 f 参数传递过滤条件
+        filter=query_filter,
+        fragment=fragment,
+    )
 
-        # 这里 page_scenes 正如你截图，是一个 list[dict]
-        if not page_scenes:
-            log.info(f"[{PLUGIN_ID}] No more scenes at page={page}, stop paging")
-            break
-
-        log.info(f"[{PLUGIN_ID}] Got {len(page_scenes)} scenes in page={page}")
-        all_scenes.extend(page_scenes)
-
-        # 更新页码和过滤器（除了第一页，后续页码需要更新）
-        page += 1
-        query_filter["page"] = page
-
-    log.info(f"[{PLUGIN_ID}] Total scenes fetched: {len(all_scenes)}")
-    return all_scenes
+    log.info(f"[{PLUGIN_ID}] Got {len(scenes)} scenes")
+    return scenes
