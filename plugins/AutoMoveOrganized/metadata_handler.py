@@ -231,16 +231,17 @@ def write_nfo_for_scene(video_path: str, scene: Dict[str, Any], settings: Dict[s
     # AI 翻译（可选）
     translated_title = None
     translated_plot = None
-    log.info("Start translating scene title and plot, It will take a long time")
-    try:
-        translated_title, translated_plot = translate_title_and_plot(
-            title=title,
-            plot=plot,
-            settings=settings,
-            performers=performer_names if performer_names else None,
-        )
-    except Exception as e:
-        log.error(f"[translator] 调用翻译失败：{e}")
+    if settings.get("translate_enable"):
+        log.info("Start translating scene title and plot, It will take a long time")
+        try:
+            translated_title, translated_plot = translate_title_and_plot(
+                title=title,
+                plot=plot,
+                settings=settings,
+                performers=performer_names if performer_names else None,
+            )
+        except Exception as e:
+            log.error(f"[translator] 调用翻译失败：{e}")
 
     # 根据配置决定最终写入 NFO 的简介；标题使用自定义格式
     final_plot = plot
@@ -443,13 +444,12 @@ def download_scene_art(video_path: str, scene: Dict[str, Any], settings: Dict[st
     # 如果重命名失败，则继续尝试重新下载
 
     abs_url = build_absolute_url(poster_url, settings)
-    log.info(f"Downloading poster from URL: {abs_url}")
 
     if settings.get("dry_run"):
         log.info(f"[dry_run] Would download poster: '{abs_url}' -> '{poster_base}.[ext]'")
         return
 
-    log.info(f"Would download poster: '{abs_url}' -> '{poster_base}.[ext]'")
+    log.info(f"Downloading poster from URL: '{abs_url}' -> '{poster_base}.[ext]'")
     ok = _download_binary(abs_url, poster_base, settings, detect_ext=True)
 
     if not ok:
