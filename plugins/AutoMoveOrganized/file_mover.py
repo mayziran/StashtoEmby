@@ -123,11 +123,6 @@ def move_file_with_suffix_handling(scene: Dict[str, Any], file_obj: Dict[str, An
         return False
 
 
-def move_file(scene: Dict[str, Any], file_obj: Dict[str, Any], settings: Dict[str, Any]) -> bool:
-    """执行单个文件的移动操作。返回是否真的移动了。"""
-    return move_file_with_suffix_handling(scene, file_obj, settings)
-
-
 def process_scene(scene: Dict[str, Any], settings: Dict[str, Any]) -> int:
     """
     根据给定的 scene 对象处理其下的文件。
@@ -532,12 +527,3 @@ def is_file_in_target_location(file_path: str, scene: Dict[str, Any], file_obj: 
     except Exception:
         # 如果计算失败，假设不在目标位置
         return False
-
-
-def should_regenerate_metadata(file_path: str, scene: Dict[str, Any], file_obj: Dict[str, Any], settings: Dict[str, Any]) -> bool:
-    """
-    检查是否需要重新生成元数据（NFO 和封面）
-    对于已经在目标路径的文件，总是需要重新生成元数据和封面
-    """
-    # 对于已经在目标路径的文件，总是需要重新生成元数据和封面
-    return True
