@@ -209,7 +209,8 @@ def get_all_scenes(stash: StashInterface, settings: Dict[str, Any], per_page: in
     # 只调用一次 API，获取一页数据（最多 per_page 个场景）
     log.info(f"[{PLUGIN_ID}] Fetching scenes (max {per_page})")
     if query_f:
-        log.info(f"[{PLUGIN_ID}] Using path filter: {query_f}")
+        # 只记录有路径过滤，不输出具体路径（避免泄露敏感信息）
+        log.info(f"[{PLUGIN_ID}] Using path filter (organized={query_f.get('organized', False)})")
 
     scenes = stash.find_scenes(
         f=query_f,  # 使用 f 参数传递过滤条件

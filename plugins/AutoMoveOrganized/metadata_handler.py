@@ -391,12 +391,8 @@ def write_nfo_for_scene(video_path: str, scene: Dict[str, Any], settings: Dict[s
     nfo_path = os.path.splitext(video_path)[0] + ".nfo"
 
     if settings.get("dry_run"):
-        try:
-            xml_str = ET.tostring(root, encoding="unicode")
-        except Exception:
-            xml_str = "<movie>...</movie>"
         log.info(f"[dry_run] Would write NFO for scene {vars_map.get('id')} -> {nfo_path}")
-        log.info(xml_str)
+        # 不输出完整 XML 内容（避免日志过长和潜在的信息泄露）
         return
 
     tree = ET.ElementTree(root)
@@ -427,7 +423,6 @@ def download_scene_art(video_path: str, scene: Dict[str, Any], settings: Dict[st
     log.info(f"Video path: {video_path}")
     log.info(f"Video directory: {video_dir}, base name: {base_name}")
     log.info(f"Poster URL: {poster_url}")
-    log.info(f"pic base name: {base_name}")
     # 先不带扩展名，真实扩展名在下载时根据 Content-Type/URL 决定
     poster_base = os.path.join(video_dir, f"{base_name}-poster")
     poster_stem = os.path.basename(poster_base)
