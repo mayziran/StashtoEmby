@@ -16,7 +16,6 @@ auto_move_organized.py - Auto Move Organized 主入口
 """
 
 import json
-import os
 import sys
 from typing import Any, Dict
 

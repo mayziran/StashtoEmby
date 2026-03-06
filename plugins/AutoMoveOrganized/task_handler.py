@@ -37,7 +37,7 @@ def task_log(message: str, progress: float | None = None) -> None:
         print(json.dumps(payload), flush=True)
     except Exception as e:
         # 不能因为日志输出失败导致任务崩溃
-        log.error(f"Failed to write task log: {e}")
+        log.error(f"[auto-move-organized] Failed to write task log: {e}")
 
 
 def handle_task(stash: StashInterface, settings: Dict[str, Any]) -> str:
@@ -49,8 +49,9 @@ def handle_task(stash: StashInterface, settings: Dict[str, Any]) -> str:
     3. 输出进度和统计
     """
     dry_run = bool(settings.get("dry_run"))
+    multi_file_mode = settings.get("multi_file_mode", "all")
 
-    log.info(f"[{settings.get('PLUGIN_ID', 'auto-move-organized')}] Task mode: scanning all scenes")
+    log.info(f"[{settings.get('PLUGIN_ID', 'auto-move-organized')}] Task mode: scanning all scenes (multi_file_mode={multi_file_mode})")
 
     scenes = get_all_scenes(stash, settings, per_page=int(settings.get("per_page", 1000)))
     total_scenes = len(scenes)
