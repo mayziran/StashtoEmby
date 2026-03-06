@@ -74,6 +74,9 @@ def move_file_with_suffix_handling(scene: Dict[str, Any], file_obj: Dict[str, An
     # 记录原始目录，用于后续清理空目录
     original_dir = os.path.dirname(src)
 
+    # 提前定义最终目标路径，避免 except 块中未定义
+    final_dst = os.path.join(dst_dir, dst_basename)
+
     try:
         if not settings.get("dry_run"):
             # 使用 GraphQL API 移动文件，这样 Stash 会自动更新数据库
@@ -86,8 +89,6 @@ def move_file_with_suffix_handling(scene: Dict[str, Any], file_obj: Dict[str, An
             os.makedirs(dst_dir, exist_ok=True)
 
         # 执行后处理（如移动字幕、生成 NFO 等）
-        # 使用最终的目标路径
-        final_dst = os.path.join(dst_dir, dst_basename)
         try:
             # 在 dry_run 模式下，我们使用原始路径作为源路径，目标路径作为目标路径
             # 在非 dry_run 模式下，文件已经被 GraphQL 移动，但我们仍需执行后处理
