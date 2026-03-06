@@ -209,6 +209,8 @@ def main():
     settings = load_settings(stash)
     # 把 server_connection 也塞到 settings 里，方便下载图片等功能使用 cookie
     settings["server_connection"] = server_conn
+    # 把 stash 对象也放入 settings，方便 file_mover.py 使用 GraphQL API
+    settings["stash_interface"] = stash
 
     # 导入 Hook 和 Task 处理器
     from hook_handler import handle_hook
