@@ -16,28 +16,7 @@ from stashapi.stashapp import StashInterface
 
 from scene_fetcher import get_all_scenes
 from file_mover import process_scene
-
-
-def task_log(message: str, progress: float | None = None) -> None:
-    """
-    向 Stash Task 界面输出一行 JSON 日志，可选带 progress（0~1）。
-    """
-    try:
-        payload: Dict[str, Any] = {"output": str(message)}
-        if progress is not None:
-            try:
-                p = float(progress)
-                if p < 0:
-                    p = 0.0
-                if p > 1:
-                    p = 1.0
-                payload["progress"] = p
-            except Exception:
-                pass
-        print(json.dumps(payload), flush=True)
-    except Exception as e:
-        # 不能因为日志输出失败导致任务崩溃
-        log.error(f"[auto-move-organized] Failed to write task log: {e}")
+from auto_move_organized import task_log
 
 
 def handle_task(stash: StashInterface, settings: Dict[str, Any]) -> str:
