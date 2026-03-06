@@ -188,7 +188,26 @@ def get_all_scenes(stash: StashInterface, settings: Dict[str, Any], per_page: in
             }
 
     # 构建查询过滤条件
-    query_filter = {"page": page, "per_page": per_page}
+    # 根据 move_only_organized 配置决定是否过滤 organized
+    move_only_organized = settings.get("move_only_organized", True)
+    
+    query_filter = {
+        "page": page,
+        "per_page": per_page,
+    }
+    
+    # 只有当 move_only_organized=true 时才在 API 层面过滤 organized
+    # 使用 f 参数（SceneFilterType）而不是 filter 参数
+    if move_only_organized:
+        if query_f:
+            # 已有路径过滤，添加到现有过滤条件中
+            query_f["organized"] = True
+        else:
+            # 没有路径过滤，创建新的 organized 过滤
+            query_f = {"organized": True}
+        log.info(f"[{PLUGIN_ID}] Using organized filter: organized=True")
+    else:
+        log.info(f"[{PLUGIN_ID}] move_only_organized=false, fetching all scenes")
 
     while True:
         log.info(f"[{PLUGIN_ID}] Fetching scenes page={page}, per_page={per_page}")

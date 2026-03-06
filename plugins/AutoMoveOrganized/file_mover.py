@@ -161,18 +161,8 @@ def process_scene(scene: Dict[str, Any], settings: Dict[str, Any]) -> int:
 
     moved_count = 0
 
-    def _is_file_organized(file_obj: Dict[str, Any]) -> bool:
-        if not settings.get("move_only_organized"):
-            return True
-        # 如果文件上没有，则退回到 scene 级别
-        if "organized" in scene:
-            return bool(scene.get("organized"))
-        return False
-
+    # API 和上层已经根据 move_only_organized 配置过滤了，所以直接处理所有文件
     for idx, f in enumerate(files_to_process):
-        if not _is_file_organized(f):
-            continue
-
         # 调用 move_file_with_suffix_handling
         if move_file_with_suffix_handling(scene, f, settings):
             moved_count += 1

@@ -79,11 +79,15 @@ def handle_hook(stash: StashInterface, scene_id: int, settings: Dict[str, Any]) 
         task_log(msg, progress=1.0)
         return msg
 
-    if not scene.get("organized"):
+    # 检查 move_only_organized 配置
+    # 只有当 move_only_organized=true 时，才跳过 organized=false 的场景
+    if not scene.get("organized") and settings.get("move_only_organized", True):
         msg = f"Scene {scene_id} not organized, skipped"
         log.info(msg)
         task_log(msg, progress=1.0)
         return msg
+
+    # 能执行到这里，说明需要处理（organized=true 或 move_only_organized=false）
 
     # 获取配置
     source_target_mapping = settings.get("source_target_mapping", "").strip()

@@ -3,8 +3,8 @@
 task_handler.py - Task 模式处理模块
 
 负责处理 Task 模式（手动批量执行）
-- 分页获取所有场景
-- 遍历处理 organized=true 的场景
+- 分页获取所有场景（API 已根据 move_only_organized 配置过滤）
+- 遍历处理场景
 - 输出进度和统计
 """
 
@@ -42,19 +42,18 @@ def task_log(message: str, progress: float | None = None) -> None:
 
 def handle_task(stash: StashInterface, settings: Dict[str, Any]) -> str:
     """
-    Task 模式入口：手动执行，遍历所有场景，移动 organized=true 的
+    Task 模式入口：手动执行，遍历所有场景
 
-    1. 分页获取所有场景
-    2. 遍历处理 organized=true 的场景
+    1. 分页获取所有场景（API 已根据 move_only_organized 配置过滤）
+    2. 遍历处理场景
     3. 输出进度和统计
     """
     dry_run = bool(settings.get("dry_run"))
 
-    log.info(f"[{settings.get('PLUGIN_ID', 'auto-move-organized')}] Task mode: scanning all scenes and moving organized=True ones")
+    log.info(f"[{settings.get('PLUGIN_ID', 'auto-move-organized')}] Task mode: scanning all scenes")
 
     scenes = get_all_scenes(stash, settings, per_page=int(settings.get("per_page", 1000)))
     total_scenes = len(scenes)
-    organized_scenes = 0
     total_moved = 0
 
     if total_scenes == 0:
@@ -63,17 +62,11 @@ def handle_task(stash: StashInterface, settings: Dict[str, Any]) -> str:
         task_log(msg, progress=1.0)
         return msg
 
+    # API 已经根据 move_only_organized 配置过滤了场景，所以返回的都是需要处理的
     for index, scene in enumerate(scenes, start=1):
         sid = int(scene["id"])
 
-        if not scene.get("organized") and settings.get("move_only_organized"):
-            # 仍然更新一下进度条
-            progress = index / total_scenes
-            task_log(f"Skipping unorganized scene {sid} ({index}/{total_scenes})", progress=progress)
-            continue
-
-        organized_scenes += 1
-        log.info(f"Processing organized scene id={sid} title={scene.get('title')!r}")
+        log.info(f"Processing scene id={sid} title={scene.get('title')!r}")
         progress = index / total_scenes
         task_log(f"Processing scene {sid} ({index}/{total_scenes})", progress=progress)
 
@@ -82,7 +75,6 @@ def handle_task(stash: StashInterface, settings: Dict[str, Any]) -> str:
 
     msg = (
         f"Scanned {total_scenes} scenes, "
-        f"organized=True: {organized_scenes}, "
         f"moved files: {total_moved}, dry_run={dry_run}"
     )
     log.info(f"[{settings.get('PLUGIN_ID', 'auto-move-organized')}] {msg}")
