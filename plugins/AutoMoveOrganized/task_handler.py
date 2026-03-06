@@ -49,9 +49,8 @@ def handle_task(stash: StashInterface, settings: Dict[str, Any]) -> str:
     3. 输出进度和统计
     """
     dry_run = bool(settings.get("dry_run"))
-    multi_file_mode = settings.get("multi_file_mode", "all")
 
-    log.info(f"[{settings.get('PLUGIN_ID', 'auto-move-organized')}] Task mode: scanning all scenes (multi_file_mode={multi_file_mode})")
+    log.info(f"[{settings.get('PLUGIN_ID', 'auto-move-organized')}] Task mode: scanning all scenes")
 
     scenes = get_all_scenes(stash, settings, per_page=int(settings.get("per_page", 1000)))
     total_scenes = len(scenes)

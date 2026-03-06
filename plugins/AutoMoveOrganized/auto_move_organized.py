@@ -134,22 +134,6 @@ def load_settings(stash: StashInterface) -> Dict[str, Any]:
     # 多文件模式设置
     multi_file_mode = _get_val("multi_file_mode", "all")
 
-    log.info(
-        f"Loaded settings: target_root='{target_root}', "
-        f"template='{filename_template}', move_only_organized={move_only_org}, "
-        f"dry_run={dry_run}, write_nfo={write_nfo}, "
-        f"download_poster={download_poster}, "
-        f"overlay_studio_logo_on_poster={overlay_studio_logo_on_poster}, "
-        f"multi_file_mode={multi_file_mode}"
-    )
-
-    # 也把 AI 配置 log 出来（注意：不要在生产环境 log 明文 API key）
-    log.info(
-        f"Translate config: enabled={translate_enable}, api_base='{translate_api_base}', "
-        f"model='{translate_model}', translate_title={translate_title}, translate_plot={translate_plot}, "
-        f"temperature={translate_temperature}"
-    )
-
     return {
         "target_root": target_root,
         "filename_template": filename_template,

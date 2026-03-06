@@ -10,7 +10,6 @@ hook_handler.py - Hook 模式处理模块
 """
 
 import json
-import os
 import re
 from typing import Any, Dict
 
