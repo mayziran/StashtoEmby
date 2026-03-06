@@ -132,13 +132,16 @@ def load_settings(stash: StashInterface) -> Dict[str, Any]:
     enable_hook_mode = bool(_get_val("enable_hook_mode", True))
     # 新增：源目录到目标目录的映射设置
     source_target_mapping = _get_val("source_target_mapping", "")
+    # 多文件模式设置
+    multi_file_mode = _get_val("multi_file_mode", "all")
 
     log.info(
         f"Loaded settings: target_root='{target_root}', "
         f"template='{filename_template}', move_only_organized={move_only_org}, "
         f"dry_run={dry_run}, write_nfo={write_nfo}, "
         f"download_poster={download_poster}, "
-        f"overlay_studio_logo_on_poster={overlay_studio_logo_on_poster}"
+        f"overlay_studio_logo_on_poster={overlay_studio_logo_on_poster}, "
+        f"multi_file_mode={multi_file_mode}"
     )
 
     # 也把 AI 配置 log 出来（注意：不要在生产环境 log 明文 API key）
@@ -171,6 +174,8 @@ def load_settings(stash: StashInterface) -> Dict[str, Any]:
         "source_target_mapping": source_target_mapping,
         # 新增：启用 Hook 模式
         "enable_hook_mode": enable_hook_mode,
+        # 多文件模式
+        "multi_file_mode": multi_file_mode,
         # 插件 ID
         "PLUGIN_ID": PLUGIN_ID,
     }
