@@ -12,7 +12,6 @@ hook_handler.py - Hook 模式处理模块
 import json
 import os
 import re
-import sys
 from typing import Any, Dict
 
 import stashapi.log as log
@@ -48,7 +47,7 @@ def task_log(message: str, progress: float | None = None) -> None:
         print(json.dumps(payload), flush=True)
     except Exception as e:
         # 不能因为日志输出失败导致任务崩溃
-        log.error(f"Failed to write task log: {e}")
+        log.error(f"[auto-move-organized] Failed to write task log: {e}")
 
 
 def handle_hook(stash: StashInterface, scene_id: int, settings: Dict[str, Any]) -> str:

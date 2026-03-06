@@ -208,8 +208,8 @@ def build_absolute_url(url: str, settings: Dict[str, Any]) -> str:
 def main():
     """插件主入口"""
     json_input = read_input()  # 插件运行时从 stdin 读
-    print(json_input)
-    log.info(f"Plugin input: {json_input}")
+    # 不输出完整输入（可能包含敏感信息），只记录启动日志
+    log.info(f"[{PLUGIN_ID}] Plugin started")
     server_conn = json_input.get("server_connection") or {}
 
     if not server_conn:
