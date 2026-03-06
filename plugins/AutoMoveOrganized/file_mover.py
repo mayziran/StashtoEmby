@@ -134,27 +134,37 @@ def process_scene(scene: Dict[str, Any], settings: Dict[str, Any]) -> int:
         return 0
 
     scene_id = scene.get("id")
-    files = scene.get("files") or []
+    
+    # 检查是否有 _files_to_process（Hook 模式下使用）
+    # 如果有，使用它；否则使用 scene["files"]
+    files_to_process = scene.get("_files_to_process")
+    if files_to_process is None:
+        files = scene.get("files") or []
+        files_to_process = files
 
-    if not files:
-        log.info(f"Scene {scene_id} has no files, skip")
+    if not files_to_process:
+        log.info(f"Scene {scene_id} has no files to process, skip")
         return 0
 
     # 多文件模式处理
     multi_file_mode = settings.get("multi_file_mode", "all")
 
-    if len(files) > 1:
+    # 注意：这里使用原始的 scene["files"] 来判断文件数量
+    # 因为 _files_to_process 可能只是部分文件
+    original_files = scene.get("files") or []
+    
+    if len(original_files) > 1:
         if multi_file_mode == "skip":
-            log.info(f"Scene {scene_id} has {len(files)} files, skipping due to multi_file_mode=skip")
+            log.info(f"Scene {scene_id} has {len(original_files)} files, skipping due to multi_file_mode=skip")
             return 0
         elif multi_file_mode == "primary_only":
-            log.debug(f"Scene {scene_id} has {len(files)} files, processing only primary file")
-            files_to_process = [files[0]]
+            log.debug(f"Scene {scene_id} has {len(original_files)} files, processing only primary file")
+            # 使用原始 scene 的第一个文件
+            files_to_process = [original_files[0]]
         else:  # "all" mode - process all files
-            log.debug(f"Scene {scene_id} has {len(files)} files, processing all")
-            files_to_process = files
-    else:
-        files_to_process = files
+            log.debug(f"Scene {scene_id} has {len(original_files)} files, processing all")
+            # files_to_process 保持不变（可能是 _files_to_process 或原始 files）
+    # else: files_to_process 保持不变
 
     moved_count = 0
 

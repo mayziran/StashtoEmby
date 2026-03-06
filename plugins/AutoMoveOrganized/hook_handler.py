@@ -112,8 +112,9 @@ def handle_hook(stash: StashInterface, scene_id: int, settings: Dict[str, Any]) 
     moved_count = 0
     if files_needing_processing:
         # 创建临时场景，只包含需要处理的文件
+        # 但保留原始 scene 的完整文件列表，以便 apply_multi_file_suffix() 计算正确的索引
         temp_scene = dict(scene)
-        temp_scene["files"] = files_needing_processing
+        temp_scene["_files_to_process"] = files_needing_processing
         moved_count = process_scene(temp_scene, settings)
 
     # 处理已经在目标目录的文件（重新生成 NFO 和封面，如果命名规则参数变化则移动到新路径）
