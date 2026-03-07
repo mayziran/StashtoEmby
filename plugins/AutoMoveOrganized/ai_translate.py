@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+import json
 import time
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -57,42 +58,65 @@ def _build_chat_completions_url(base_url: str) -> str:
     return f"{base_url}/chat/completions"
 
 
-def _call_openai_compatible_api_for_text(
-    text: str,
+def _call_openai_compatible_api_for_combined_text(
+    title: str,
+    plot: str,
     cfg: Dict[str, Any],
-    field: str,
     performers: Optional[List[str]] = None,
-) -> Optional[str]:
+) -> Tuple[Optional[str], Optional[str]]:
     """
-    调用 OpenAI 兼容的 chat/completions 接口，翻译单段文本。
-    期望返回内容为「仅包含译文」的一段字符串。
-    
+    调用 OpenAI 兼容的 chat/completions 接口，一次性翻译标题和简介。
+    使用 JSON 格式输入和输出，便于 AI 理解和解析。
+
+    输入格式（JSON）：
+        {"title": "标题文本", "plot": "简介文本"}
+
+    输出格式（JSON）：
+        {"title": "翻译后的标题", "plot": "翻译后的简介"}
+
     重试机制：最多重试 3 次，每次等待 5 秒
-    如果 3 次都失败，返回 None（由调用方使用原文）
+    如果 3 次都失败，返回 (None, None)
     """
     api_url = _build_chat_completions_url(cfg["base_url"])
     if not api_url or not cfg["api_key"] or not cfg["model"]:
         log.error("[translator] 缺少翻译 API 配置（base_url/api_key/model），跳过翻译")
-        return None
+        return None, None
 
-    headers = {
-        "Authorization": f"Bearer {cfg['api_key']}",
-        "Content-Type": "application/json",
-    }
+    # 构建输入文本（JSON 格式）
+    input_data = {}
+    need_title = cfg["translate_title"] and title
+    need_plot = cfg["translate_plot"] and plot
 
-    # 构建 system prompt，将演员列表追加到提示词末尾
+    if need_title:
+        input_data["title"] = title
+    if need_plot:
+        input_data["plot"] = plot
+
+    if not input_data:
+        return None, None
+
+    input_text = json.dumps(input_data, ensure_ascii=False)
+
+    # 构建 system prompt（使用默认提示词，追加演员列表和 JSON 格式要求）
     system_prompt = cfg["prompt"]
     if performers:
         performers_str = ", ".join(performers)
         system_prompt = f"{system_prompt}{performers_str}"
+    # 追加 JSON 格式要求，让 AI 按标准格式返回
+    system_prompt += " Return the translation in JSON format: {\"title\": \"...\", \"plot\": \"...\"} with only the translated fields."
 
     body = {
         "model": cfg["model"],
         "temperature": cfg["temperature"],
         "messages": [
             {"role": "system", "content": system_prompt},
-            {"role": "user", "content": text or ""},
+            {"role": "user", "content": input_text},
         ],
+    }
+
+    headers = {
+        "Authorization": f"Bearer {cfg['api_key']}",
+        "Content-Type": "application/json",
     }
 
     # 最多重试 3 次，使用指数退避策略（5s, 10s, 15s）
@@ -111,7 +135,8 @@ def _call_openai_compatible_api_for_text(
 
             result = content.strip()
             if result:
-                return result
+                # 解析 JSON 格式返回结果
+                return _parse_json_result(result, need_title, need_plot)
             else:
                 # 空内容也视为失败，继续重试
                 if attempt < max_attempts:
@@ -125,9 +150,46 @@ def _call_openai_compatible_api_for_text(
                 time.sleep(wait_time)
             else:
                 log.error(f"[translator] Translation failed after {max_attempts} attempts: {e}")
-                return None
+                return None, None
 
-    return None
+    return None, None
+
+
+def _parse_json_result(
+    result: str,
+    need_title: bool,
+    need_plot: bool,
+) -> Tuple[Optional[str], Optional[str]]:
+    """
+    解析 AI 返回的 JSON 格式结果，提取标题和简介。
+
+    期望格式（JSON）：
+        {"title": "翻译后的标题", "plot": "翻译后的简介"}
+
+    或单字段：
+        {"title": "翻译后的标题"}
+    或
+        {"plot": "翻译后的简介"}
+    """
+    translated_title = None
+    translated_plot = None
+
+    try:
+        # 尝试直接解析 JSON
+        parsed = json.loads(result)
+        if isinstance(parsed, dict):
+            translated_title = parsed.get("title")
+            translated_plot = parsed.get("plot")
+    except json.JSONDecodeError:
+        # JSON 解析失败，尝试兼容处理
+        log.warning(f"[translator] JSON parse failed, trying fallback: {result[:100]}")
+        # Fallback: 将整个结果作为简介
+        if need_plot:
+            translated_plot = result
+        elif need_title:
+            translated_title = result
+
+    return translated_title, translated_plot
 
 
 def translate_title_and_plot(
@@ -155,18 +217,8 @@ def translate_title_and_plot(
     if not cfg["translate_title"] and not cfg["translate_plot"]:
         return None, None
 
-    translated_title: Optional[str] = None
-    translated_plot: Optional[str] = None
-
-    if cfg["translate_title"] and title:
-        translated_title = _call_openai_compatible_api_for_text(
-            title, cfg, field="title", performers=performers
-        )
-
-    if cfg["translate_plot"] and plot:
-        translated_plot = _call_openai_compatible_api_for_text(
-            plot, cfg, field="plot", performers=performers
-        )
-
-    return translated_title, translated_plot
+    # 一次 API 调用完成标题和简介翻译
+    return _call_openai_compatible_api_for_combined_text(
+        title, plot, cfg, performers
+    )
 
