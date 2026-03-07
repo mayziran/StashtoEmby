@@ -229,9 +229,12 @@ def write_nfo_for_scene(video_path: str, scene: Dict[str, Any], settings: Dict[s
             performer_names.append(p["name"])
 
     # AI 翻译（可选）
-    translated_title = None
-    translated_plot = None
-    if settings.get("translate_enable"):
+    # 优先使用缓存的翻译结果（process_scene 中已预检并缓存），如果没有则调用 API（向后兼容）
+    translated_title = scene.get("_translated_title")
+    translated_plot = scene.get("_translated_plot")
+    
+    # 如果没有缓存结果且启用了翻译，则调用 API（向后兼容模式，例如直接从其他入口调用本函数）
+    if settings.get("translate_enable") and not translated_title and not translated_plot:
         log.info("Start translating scene title and plot, It will take a long time")
         try:
             translated_title, translated_plot = translate_title_and_plot(

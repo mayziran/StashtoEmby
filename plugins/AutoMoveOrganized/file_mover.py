@@ -166,6 +166,46 @@ def process_scene(scene: Dict[str, Any], settings: Dict[str, Any]) -> int:
             # files_to_process 保持不变（可能是 _files_to_process 或原始 files）
     # else: files_to_process 保持不变
 
+    # 【新增】如果启用了翻译，在移动文件之前先测试翻译是否可用
+    # 这样如果翻译失败，文件不会被移动，并且会停止整个任务
+    if settings.get("translate_enable"):
+        from ai_translate import translate_title_and_plot
+        
+        # 获取场景基本信息用于测试翻译
+        test_title = scene.get("title") or ""
+        test_plot = scene.get("details") or ""
+        
+        # 获取演员列表
+        performer_names = []
+        for p in scene.get("performers") or []:
+            if isinstance(p, dict) and p.get("name"):
+                performer_names.append(p["name"])
+        
+        log.info(f"[translator] Testing translation before moving files for scene {scene_id}")
+        translated_title, translated_plot = translate_title_and_plot(
+            title=test_title,
+            plot=test_plot,
+            settings=settings,
+            performers=performer_names if performer_names else None,
+        )
+        
+        # 检查翻译结果是否符合预期
+        translation_failed = False
+        if settings.get("translate_title") and test_title and not translated_title:
+            translation_failed = True
+        if settings.get("translate_plot") and test_plot and not translated_plot:
+            translation_failed = True
+        
+        if translation_failed:
+            error_msg = f"[translator] Translation test failed for scene {scene_id}, stopping task (file will remain in original location)"
+            log.error(error_msg)
+            raise RuntimeError(error_msg)
+        
+        # 缓存翻译结果到 scene 对象，避免后续重复调用 API
+        scene["_translated_title"] = translated_title
+        scene["_translated_plot"] = translated_plot
+        log.info(f"[translator] Translation test passed for scene {scene_id}")
+
     moved_count = 0
 
     # API 和上层已经根据 move_only_organized 配置过滤了，所以直接处理所有文件
