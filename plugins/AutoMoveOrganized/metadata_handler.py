@@ -351,10 +351,13 @@ def write_nfo_for_scene(video_path: str, scene: Dict[str, Any], settings: Dict[s
         _set_text("genre", name)
         _set_text("tag", name)
 
-    # collection / set：使用 group 名称
+    # set：使用 group 名称
     if collection_name:
-        _set_text("set", collection_name)
-        _set_text("collection", collection_name)
+        set_el = ET.SubElement(root, "set")
+        set_name = ET.SubElement(set_el, "name")
+        set_name.text = collection_name
+        collection_el = ET.SubElement(root, "collection")
+        collection_el.text = collection_name
 
     # uniqueid：根据 Stash-Box 实例类型写入对应的 type（支持多个）
     # 注意：不设置 default 属性，遵循 Emby 规范（default="false" 或省略）
