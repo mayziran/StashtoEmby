@@ -128,7 +128,7 @@ errLog: info
 
 tasks:
   - name: Run Auto Move Organized
-    description: 手动执行：批量处理所有场景（（每次最多1000个）
+    description: 手动执行：批量处理所有场景（每次最多1000个）
     defaultArgs: {}
 
 hooks:
