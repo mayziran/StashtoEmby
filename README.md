@@ -112,6 +112,12 @@
 
 ---
 
+## 插件设置页面
+
+![插件设置页面](docs/plugin-settings.png)
+
+---
+
 ## 支持
 
 - **问题反馈**: [GitHub Issues](https://github.com/mayziran/StashtoEmby/issues)
