@@ -1,0 +1,28 @@
+name: Open in Emby
+description: 在场景页面工具栏添加按钮，通过 Stash ID 匹配 Emby 视频并跳转
+version: "1.0.0"
+url: https://github.com/mayziran/StashtoEmby/tree/master/plugins/OpenInEmby
+
+ui:
+  javascript:
+    - open_in_emby.js
+
+settings:
+  embyServer:
+    displayName: Emby 服务器地址（跳转用）
+    description: "用于网页跳转，例如：https://emby.example.com:8923"
+    type: STRING
+  embyInternalServer:
+    displayName: Emby 内网地址（API 用）
+    description: "用于后端 API 请求，例如：http://172.17.0.1:8096 或 http://192.168.1.100:8096"
+    type: STRING
+  embyApiKey:
+    displayName: Emby API Key
+    description: "Emby 控制台 → API Keys"
+    type: STRING
+
+# Python 后端
+exec:
+  - python
+  - "{pluginDir}/open_in_emby.py"
+interface: raw

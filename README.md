@@ -10,7 +10,7 @@
 
 1. 进入 **设置 → 插件 → 可用插件**
 2. 点击 **添加源**
-3. 输入 URL: `https://mayziran.github.io/StashtoEmby/stable/index.yml` 名称:StashtoEmby 本地路径: StashtoEmby
+3. 输入 URL: `https://mayziran.github.io/StashtoEmby/stable/index.yml` 名称:StashtoEmby 本地路径：StashtoEmby
 4. 点击 **重新加载**
 5. 在 "StashtoEmby" 下浏览并安装可用插件
 
@@ -18,7 +18,7 @@
 
 ### actorSyncEmby
 
-将Stash中的演员信息（图片和NFO文件）导出到指定目录，并可选择性地将这些信息上传到Emby服务器。
+将 Stash 中的演员信息（图片和 NFO 文件）导出到指定目录，并可选择性地将这些信息上传到 Emby 服务器。
 
 **功能：**
 - 同步演员基本信息到 Emby
@@ -30,15 +30,15 @@
 
 ### AutoMoveOrganized
 
-在场景更新后，把已整理(organized)的文件移动到指定目录，并按模板重命名。
+在场景更新后，把已整理 (organized) 的文件移动到指定目录，并按模板重命名。
 
 **功能：**
 - 根据元数据自动移动文件
 - 使用自定义模板重命名文件
 - 支持批量处理
-- 支持Hook模式（自动响应场景更新）和Task模式（手动批量处理）
+- 支持 Hook 模式（自动响应场景更新）和 Task 模式（手动批量处理）
 - 生成 NFO 文件和下载封面图
-- 支持AI翻译元数据
+- 支持 AI 翻译元数据
 
 [详细文档](https://github.com/mayziran/StashtoEmby/blob/master/plugins/AutoMoveOrganized/README.md)
 
@@ -58,6 +58,19 @@
 - 两者互补，不冲突
 
 [详细文档](https://github.com/mayziran/StashtoEmby/blob/master/plugins/StudioToCollection/README.md)
+
+### Open in Emby
+
+在场景页面工具栏添加"Open in Emby"按钮，通过 Stash ID 匹配 Emby 中的视频并跳转到详情页。
+
+**功能：**
+- 工具栏按钮，一键跳转到 Emby 详情页
+- 通过 Stash ID 精确匹配 Emby 视频
+- 支持双地址配置（内网 API 查询 + 外网网页跳转）
+
+**前置依赖：** 需要 Emby 安装 [Jellyfin.Plugin.Stash](https://github.com/DirtyRacer1337/Jellyfin.Plugin.Stash) 插件
+
+[详细文档](https://github.com/mayziran/StashtoEmby/blob/master/plugins/OpenInEmby/README.md)
 
 ---
 
@@ -122,4 +135,3 @@
 
 - **问题反馈**: [GitHub Issues](https://github.com/mayziran/StashtoEmby/issues)
 - **社区交流**: [Stash Discord](https://discord.gg/stashapp) | [Stash Discourse](https://discourse.stashapp.cc/)
-
