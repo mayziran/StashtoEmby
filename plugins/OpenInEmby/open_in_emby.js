@@ -2,7 +2,6 @@
   "use strict";
 
   const HOST_SPAN_ID = "open_in_emby__host_span";
-  const BTN_ID = "open_in_emby__btn";
   const PLUGIN_ID = "open_in_emby";
 
   const ICON_URL = "https://cdn.jsdelivr.net/gh/lige47/QuanX-icon-rule@main/icon/04ProxySoft/emby.png";
@@ -13,15 +12,9 @@
   <text x="256" y="320" font-size="200" text-anchor="middle" fill="white" font-weight="bold">E</text>
 </svg>`.trim();
 
-  function log(...args) {
-    console.log("[open_in_emby]", ...args);
-  }
-
-  function svgFromString(svgStr) {
-    const tpl = document.createElement("template");
-    tpl.innerHTML = svgStr.trim();
-    return tpl.content.firstChild;
-  }
+  // ═══════════════════════════════════════════════════════════
+  // 模块 1: 按钮管理（UI 层）
+  // ═══════════════════════════════════════════════════════════
 
   function getSceneId() {
     const path = window.location.pathname;
@@ -30,6 +23,119 @@
     m = (window.location.hash || "").match(/\/scenes\/(\d+)/);
     return m ? parseInt(m[1], 10) : null;
   }
+
+  function findToolbarGroup() {
+    const groups = Array.from(document.querySelectorAll("span.scene-toolbar-group"));
+    for (const g of groups) {
+      const eye = g.querySelector('div.count-button.increment-only.btn-group svg[data-icon="eye"]');
+      if (eye) return g;
+    }
+    return null;
+  }
+
+  function createIconNode() {
+    const img = document.createElement("img");
+    img.src = ICON_URL;
+    img.alt = "Emby";
+    img.referrerPolicy = "no-referrer";
+    img.style.width = "1em";
+    img.style.height = "1em";
+    img.style.display = "block";
+
+    img.onerror = () => {
+      try {
+        const tpl = document.createElement("template");
+        tpl.innerHTML = FALLBACK_SVG;
+        img.replaceWith(tpl.content.firstChild);
+      } catch (e) {
+        console.log("Icon fallback failed:", e);
+      }
+    };
+
+    return img;
+  }
+
+  function createButton() {
+    const toolbarGroup = findToolbarGroup();
+    if (!toolbarGroup) return false;
+
+    if (document.getElementById(HOST_SPAN_ID)) {
+      return true;
+    }
+
+    const host = document.createElement("span");
+    host.id = HOST_SPAN_ID;
+
+    const group = document.createElement("div");
+    group.setAttribute("role", "group");
+    group.className = "btn-group";
+
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "minimal btn btn-secondary";
+    btn.title = "Open in Emby";
+    btn.appendChild(createIconNode());
+
+    group.appendChild(btn);
+    host.appendChild(group);
+
+    const refSpan = toolbarGroup.querySelector('div.count-button.increment-only.btn-group svg[data-icon="eye"]')?.closest("span");
+    if (refSpan) {
+      toolbarGroup.insertBefore(host, refSpan);
+    } else {
+      toolbarGroup.appendChild(host);
+    }
+
+    btn.onclick = async () => {
+      const sceneId = getSceneId();
+      if (!sceneId) {
+        alert("错误：无法获取场景 ID");
+        return;
+      }
+
+      const originalHTML = btn.innerHTML;
+      btn.innerHTML = "⏳";
+      btn.disabled = true;
+
+      try {
+        const settings = await getPluginSettings();
+
+        if (!settings.embyServer) {
+          alert("Open in Emby: 请先配置 Emby 服务器地址（跳转用）");
+          return;
+        }
+        if (!settings.embyInternalServer) {
+          alert("Open in Emby: 请先配置 Emby 内网地址（API 用）");
+          return;
+        }
+        if (!settings.embyApiKey) {
+          alert("Open in Emby: 请先配置 Emby API Key");
+          return;
+        }
+
+        const result = await matchByStashId(settings, sceneId);
+
+        if (result?.url) {
+          window.open(result.url, "_blank", "noopener,noreferrer");
+        } else if (result?.error) {
+          alert(`Open in Emby: ${result.error}`);
+        } else {
+          alert(`Open in Emby:\nEmby 中未找到匹配的视频\n\nStash ID: ${sceneId}`);
+        }
+      } catch (err) {
+        alert(`Open in Emby 错误：${err.message}`);
+      } finally {
+        btn.innerHTML = originalHTML;
+        btn.disabled = false;
+      }
+    };
+
+    return true;
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  // 模块 2: GraphQL 通信和配置读取
+  // ═══════════════════════════════════════════════════════════
 
   async function gql(query, variables) {
     const res = await fetch(localStorage.getItem("apiEndpoint") || "/graphql", {
@@ -68,155 +174,51 @@
     };
   }
 
-  async function matchByStashId(args, stashId) {
+  async function matchByStashId(settings, stashId) {
     const data = await gql(`
       mutation RunPluginOperation($plugin_id: ID!, $args: Map) {
         runPluginOperation(plugin_id: $plugin_id, args: $args)
       }
     `, {
       plugin_id: PLUGIN_ID,
-      args: { ...args, stash_id: stashId.toString() },
+      args: {
+        embyServer: settings.embyServer,
+        embyInternalServer: settings.embyInternalServer,
+        embyApiKey: settings.embyApiKey,
+        stash_id: stashId.toString(),
+      },
     });
 
     const output = data?.runPluginOperation;
-    if (!output) return null;
+    if (!output) return { error: "后端无响应" };
 
     const parsed = typeof output === 'string' ? JSON.parse(output) : output;
     const result = parsed.output || parsed;
 
-    if (result.success && result.url) {
-      log(`✅ ${result.item?.name || '未知'}`);
-      return result.url;
+    if (result?.success && result?.url) {
+      console.log("[open_in_emby] ✅", result.item?.name);
+      return { url: result.url, item: result.item };
     }
-    log(`❌ ${result.error || '未知错误'}`);
-    return null;
+    console.log("[open_in_emby] ❌", result?.error);
+    return { error: result?.error || "未知错误" };
   }
 
-  function createIconNode() {
-    const img = document.createElement("img");
-    img.src = ICON_URL;
-    img.alt = "Emby";
-    img.referrerPolicy = "no-referrer";
-    img.style.width = "1em";
-    img.style.height = "1em";
-    img.style.display = "block";
-
-    img.onerror = () => {
-      try {
-        img.replaceWith(svgFromString(FALLBACK_SVG));
-      } catch (e) {
-        log("Icon fallback failed:", e);
-      }
-    };
-
-    return img;
-  }
-
-  function findToolbarGroup() {
-    const groups = Array.from(document.querySelectorAll("span.scene-toolbar-group"));
-    for (const g of groups) {
-      const eye = g.querySelector('div.count-button.increment-only.btn-group svg[data-icon="eye"]');
-      if (eye) return g;
-    }
-    return null;
-  }
-
-  // 提取点击事件处理函数，方便复用
-  function createButtonOnClickHandler(sceneId, btn) {
-    return async (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-
-      const originalHTML = btn.innerHTML;
-      btn.innerHTML = "⏳";
-      btn.disabled = true;
-
-      try {
-        const settings = await getPluginSettings();
-
-        if (!settings.embyServer) {
-          alert("Open in Emby: 请先配置 Emby 服务器地址（跳转用）");
-          return;
-        }
-        if (!settings.embyInternalServer) {
-          alert("Open in Emby: 请先配置 Emby 内网地址（API 用）");
-          return;
-        }
-        if (!settings.embyApiKey) {
-          alert("Open in Emby: 请先配置 Emby API Key");
-          return;
-        }
-
-        const url = await matchByStashId(settings, sceneId);
-
-        if (url) {
-          window.open(url, "_blank", "noopener,noreferrer");
-        } else {
-          alert(`Open in Emby:\nEmby 中未找到匹配的视频\n\nStash ID: ${sceneId}`);
-        }
-      } catch (err) {
-        alert(`Open in Emby 错误：${err.message}`);
-      } finally {
-        btn.innerHTML = originalHTML;
-        btn.disabled = false;
-      }
-    };
-  }
-
-  function createButton(sceneId) {
-    const toolbarGroup = findToolbarGroup();
-    if (!toolbarGroup) return false;
-
-    // 检查是否已存在，存在则只更新 onclick（upsert 模式）
-    let host = document.getElementById(HOST_SPAN_ID);
-    if (host) {
-      const btn = document.getElementById(BTN_ID);
-      if (btn) {
-        btn.onclick = createButtonOnClickHandler(sceneId, btn);
-      }
-      return true;
-    }
-
-    // 不存在才创建
-    host = document.createElement("span");
-    host.id = HOST_SPAN_ID;
-
-    const group = document.createElement("div");
-    group.setAttribute("role", "group");
-    group.className = "btn-group";
-
-    const btn = document.createElement("button");
-    btn.id = BTN_ID;
-    btn.type = "button";
-    btn.className = "minimal btn btn-secondary";
-    btn.title = "Open in Emby";
-    btn.appendChild(createIconNode());
-
-    group.appendChild(btn);
-    host.appendChild(group);
-
-    const refSpan = toolbarGroup.querySelector('div.count-button.increment-only.btn-group svg[data-icon="eye"]')?.closest("span");
-    if (refSpan) {
-      toolbarGroup.insertBefore(host, refSpan);
-    } else {
-      toolbarGroup.appendChild(host);
-    }
-
-    btn.onclick = createButtonOnClickHandler(sceneId, btn);
-
-    return true;
-  }
+  // ═══════════════════════════════════════════════════════════
+  // 模块 3: 初始化和路由监听
+  // ═══════════════════════════════════════════════════════════
 
   function handleLocation() {
     const sceneId = getSceneId();
-    if (!sceneId) return;
 
-    // React 需要多次尝试创建按钮
+    if (!sceneId) {
+      return;
+    }
+
     let tries = 0;
     const maxTries = 40;
     const tick = () => {
       tries += 1;
-      const ok = createButton(sceneId);
+      const ok = createButton();
       if (!ok && tries < maxTries) {
         setTimeout(tick, 100);
       }
@@ -224,16 +226,13 @@
     tick();
   }
 
-  // 首次加载
   handleLocation();
 
-  // 监听路由变化
   if (window.PluginApi?.Event?.addEventListener) {
     PluginApi.Event.addEventListener("stash:location", () => {
       setTimeout(handleLocation, 200);
     });
   } else {
-    // fallback: 轮询
-    setInterval(handleLocation, 1000);
+    setInterval(handleLocation, 2000);  // 2 秒轮询一次
   }
 })();

@@ -54,7 +54,7 @@ def query_emby(emby_server: str, emby_internal_server: str, emby_api_key: str, s
                 return {"success": True, "error": "未找到匹配", "url": None, "item": None}
 
     except urllib.error.HTTPError as e:
-        return {"success": False, "error": f"HTTP 错误：{e.code} {e.reason}", "url": None, "item": None}
+        return {"success": False, "error": f"HTTP 错误 {e.code}", "url": None, "item": None}
     except urllib.error.URLError as e:
         return {"success": False, "error": f"网络错误：{e.reason}", "url": None, "item": None}
     except Exception as e:
@@ -66,17 +66,17 @@ def main():
     # 读取 stdin 的 JSON 输入
     try:
         input_json = sys.stdin.read()
-        
+
         if not input_json:
-            print(json.dumps({"output": {"error": "输入为空"}}))
+            print(json.dumps({"output": {"success": False, "error": "输入为空"}}))
             return
-        
+
         input_data = json.loads(input_json)
     except json.JSONDecodeError as e:
-        print(json.dumps({"output": {"error": f"JSON 解析失败：{e}"}}))
+        print(json.dumps({"output": {"success": False, "error": f"JSON 解析失败：{e}"}}))
         return
     except Exception as e:
-        print(json.dumps({"output": {"error": f"读取失败：{e}"}}))
+        print(json.dumps({"output": {"success": False, "error": f"读取失败：{e}"}}))
         return
 
     # 从 args 获取所有参数（前端传递）
@@ -89,24 +89,16 @@ def main():
 
     # 验证参数
     if not stash_id:
-        print(json.dumps({"output": {"error": "缺少参数：stash_id"}}))
+        print(json.dumps({"output": {"success": False, "error": "缺少参数：stash_id"}}))
         return
 
-    if not emby_server:
-        print(json.dumps({"output": {"error": "缺少配置：Emby 服务器地址（跳转用）"}}))
-        return
-
-    if not emby_internal_server:
-        print(json.dumps({"output": {"error": "缺少配置：Emby 内网地址（API 用）"}}))
-        return
-
-    if not emby_api_key:
-        print(json.dumps({"output": {"error": "缺少配置：Emby API Key"}}))
+    if not emby_server or not emby_internal_server or not emby_api_key:
+        print(json.dumps({"output": {"success": False, "error": "缺少配置：Emby 服务器地址、内网地址、API Key"}}))
         return
 
     # 查询 Emby
     result = query_emby(emby_server, emby_internal_server, emby_api_key, str(stash_id))
-    
+
     # 输出结果
     print(json.dumps({"output": result}))
 
