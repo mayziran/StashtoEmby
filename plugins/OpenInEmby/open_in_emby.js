@@ -1,136 +1,206 @@
 (() => {
   "use strict";
 
-  const HOST_SPAN_ID = "open_in_emby__host_span";
-  const PLUGIN_ID = "open_in_emby";
+  // ═══════════════════════════════════════════════════════════
+  // 常量定义
+  // ═══════════════════════════════════════════════════════════
 
+  const PLUGIN_ID = "open_in_emby";
   const ICON_URL = "https://cdn.jsdelivr.net/gh/lige47/QuanX-icon-rule@main/icon/04ProxySoft/emby.png";
 
-  const FALLBACK_SVG = `
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" style="width:1em;height:1em;display:block;">
-  <circle cx="256" cy="256" r="200" fill="#52B54B"/>
-  <text x="256" y="320" font-size="200" text-anchor="middle" fill="white" font-weight="bold">E</text>
-</svg>`.trim();
+  const TYPE_PATTERNS = {
+    scene: /\/scenes\/(\d+)/,
+    performer: /\/performers\/(\d+)/,
+    studio: /\/studios\/(\d+)/
+  };
+
+  const EMBY_TYPE_MAP = {
+    scene: "Movie",
+    performer: "Person",
+    studio: "BoxSet"
+  };
 
   // ═══════════════════════════════════════════════════════════
   // 模块 1: 按钮管理（UI 层）
   // ═══════════════════════════════════════════════════════════
 
-  function getSceneId() {
-    const path = window.location.pathname;
-    let m = path.match(/\/scenes\/(\d+)/);
-    if (m) return parseInt(m[1], 10);
-    m = (window.location.hash || "").match(/\/scenes\/(\d+)/);
-    return m ? parseInt(m[1], 10) : null;
-  }
+  let cachedIcon = null;
 
-  function findToolbarGroup() {
-    const groups = Array.from(document.querySelectorAll("span.scene-toolbar-group"));
-    for (const g of groups) {
-      const eye = g.querySelector('div.count-button.increment-only.btn-group svg[data-icon="eye"]');
-      if (eye) return g;
-    }
-    return null;
-  }
+  function getIconNode() {
+    if (cachedIcon) return cachedIcon.cloneNode(true);
 
-  function createIconNode() {
     const img = document.createElement("img");
     img.src = ICON_URL;
     img.alt = "Emby";
     img.referrerPolicy = "no-referrer";
-    img.style.width = "1em";
-    img.style.height = "1em";
-    img.style.display = "block";
+    img.style.cssText = "display:block;width:1.2em;height:1.2em;";
+
+    img.onload = () => { cachedIcon = img.cloneNode(true); };
 
     img.onerror = () => {
-      try {
-        const tpl = document.createElement("template");
-        tpl.innerHTML = FALLBACK_SVG;
-        img.replaceWith(tpl.content.firstChild);
-      } catch (e) {
-        console.log("Icon fallback failed:", e);
-      }
+      const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+      svg.setAttribute("viewBox", "0 0 512 512");
+      svg.style.cssText = "display:block;width:1.2em;height:1.2em;";
+      svg.innerHTML = `<circle cx="256" cy="256" r="200" fill="#52B54B"/><text x="256" y="320" font-size="200" text-anchor="middle" fill="white" font-weight="bold">E</text>`;
+      cachedIcon = svg;
+      img.replaceWith(svg.cloneNode(true));
     };
 
     return img;
   }
 
-  function createButton() {
-    const toolbarGroup = findToolbarGroup();
-    if (!toolbarGroup) return false;
+  function initCSS() {
+    if (document.getElementById("open-in-emby-css")) return;
 
-    if (document.getElementById(HOST_SPAN_ID)) {
-      return true;
-    }
-
-    const host = document.createElement("span");
-    host.id = HOST_SPAN_ID;
-
-    const group = document.createElement("div");
-    group.setAttribute("role", "group");
-    group.className = "btn-group";
-
-    const btn = document.createElement("button");
-    btn.type = "button";
-    btn.className = "minimal btn btn-secondary";
-    btn.title = "Open in Emby";
-    btn.appendChild(createIconNode());
-
-    group.appendChild(btn);
-    host.appendChild(group);
-
-    const refSpan = toolbarGroup.querySelector('div.count-button.increment-only.btn-group svg[data-icon="eye"]')?.closest("span");
-    if (refSpan) {
-      toolbarGroup.insertBefore(host, refSpan);
-    } else {
-      toolbarGroup.appendChild(host);
-    }
-
-    btn.onclick = async () => {
-      const sceneId = getSceneId();
-      if (!sceneId) {
-        alert("错误：无法获取场景 ID");
-        return;
+    const style = document.createElement("style");
+    style.id = "open-in-emby-css";
+    style.textContent = `
+      .open-in-emby-btn {
+        background: none !important;
+        border: none !important;
+        padding: 0 !important;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
       }
+      .open-in-emby-btn:hover {
+        background: none !important;
+      }
+      .open-in-emby-btn img,
+      .open-in-emby-btn svg {
+        display: block;
+        width: 1.2em;
+        height: 1.2em;
+        transition: opacity 0.2s;
+      }
+      .open-in-emby-btn:hover img,
+      .open-in-emby-btn:hover svg {
+        opacity: 0.7;
+      }
+    `;
+    document.head.appendChild(style);
+  }
 
-      const originalHTML = btn.innerHTML;
-      btn.innerHTML = "⏳";
-      btn.disabled = true;
+  function createEmbyButton(type, id) {
+    const btn = document.createElement("button");
+    btn.className = "open-in-emby-btn";
+    btn.appendChild(getIconNode());
 
+    btn.onclick = async (e) => {
+      e.stopPropagation();
+      e.preventDefault();
       try {
         const settings = await getPluginSettings();
-
-        if (!settings.embyServer) {
-          alert("Open in Emby: 请先配置 Emby 服务器地址（跳转用）");
-          return;
-        }
-        if (!settings.embyInternalServer) {
-          alert("Open in Emby: 请先配置 Emby 内网地址（API 用）");
-          return;
-        }
-        if (!settings.embyApiKey) {
-          alert("Open in Emby: 请先配置 Emby API Key");
-          return;
+        if (!settings.embyServer || !settings.embyInternalServer || !settings.embyApiKey) {
+          throw new Error("请先配置 Emby 服务器地址、内网地址和 API Key");
         }
 
-        const result = await matchByStashId(settings, sceneId);
+        const data = await gql(`mutation RunPluginOperation($plugin_id: ID!, $args: Map) { runPluginOperation(plugin_id: $plugin_id, args: $args) }`, {
+          plugin_id: PLUGIN_ID,
+          args: {
+            embyServer: settings.embyServer,
+            embyInternalServer: settings.embyInternalServer,
+            embyApiKey: settings.embyApiKey,
+            stash_id: id.toString(),
+            includeItemTypes: EMBY_TYPE_MAP[type] || 'Movie',
+          },
+        });
 
-        if (result?.url) {
+        const result = (typeof data?.runPluginOperation === 'string' ? JSON.parse(data.runPluginOperation) : data?.runPluginOperation) || {};
+
+        if (result?.success && result?.url) {
           window.open(result.url, "_blank", "noopener,noreferrer");
-        } else if (result?.error) {
-          alert(`Open in Emby: ${result.error}`);
         } else {
-          alert(`Open in Emby:\nEmby 中未找到匹配的视频\n\nStash ID: ${sceneId}`);
+          throw new Error(result?.error || "Emby 中未找到匹配");
         }
       } catch (err) {
-        alert(`Open in Emby 错误：${err.message}`);
-      } finally {
-        btn.innerHTML = originalHTML;
-        btn.disabled = false;
+        alert(`Open in Emby: ${err.message}`);
       }
     };
 
-    return true;
+    return btn;
+  }
+
+  function getItemId() {
+    const path = window.location.pathname;
+    const hash = window.location.hash || "";
+    for (const [type, regex] of Object.entries(TYPE_PATTERNS)) {
+      let m = path.match(regex) || hash.match(regex);
+      if (m) return { type, id: parseInt(m[1], 10) };
+    }
+    return null;
+  }
+
+  function getCardInfo(card) {
+    const link = card.querySelector('a[href*="/scenes/"], a[href*="/performers/"], a[href*="/studios/"]');
+    if (!link) return null;
+    for (const [type, regex] of Object.entries(TYPE_PATTERNS)) {
+      const m = link.href.match(regex);
+      if (m) return { type, id: parseInt(m[1], 10) };
+    }
+    return null;
+  }
+
+  function addSceneDetailButton() {
+    const item = getItemId();
+    if (!item || item.type !== 'scene') return;
+
+    const toolbarGroups = Array.from(document.querySelectorAll("span.scene-toolbar-group"));
+    const toolbarGroup = toolbarGroups.length > 1 ? toolbarGroups[1] : null;
+    if (!toolbarGroup || document.getElementById("open_in_emby__btn")) return;
+
+    const btn = createEmbyButton('scene', item.id);
+    btn.id = "open_in_emby__btn";
+
+    const viewCountSpan = toolbarGroup.querySelector('span:has(.view-count-button), span:has(.count-button)');
+    if (viewCountSpan && viewCountSpan.parentNode) {
+      viewCountSpan.parentNode.insertBefore(btn, viewCountSpan);
+    } else {
+      toolbarGroup.appendChild(btn);
+    }
+  }
+
+  function addPerformerStudioButton() {
+    const item = getItemId();
+    if (!item || (item.type !== 'performer' && item.type !== 'studio')) return;
+    if (document.getElementById("open-in-emby-toolbar")) return;
+
+    const qualityGroup = document.querySelector('.quality-group');
+    if (!qualityGroup) return;
+
+    const btn = createEmbyButton(item.type, item.id);
+    btn.id = "open-in-emby-toolbar";
+
+    const oCounter = qualityGroup.querySelector('.o-counter-button, .count-button');
+    if (oCounter && oCounter.parentNode) {
+      oCounter.parentNode.insertBefore(btn, oCounter.nextSibling);
+    } else {
+      qualityGroup.appendChild(btn);
+    }
+  }
+
+  function addCardButton(card) {
+    if (!card || card.querySelector('.open-in-emby-btn')) return;
+
+    const info = getCardInfo(card);
+    if (!info) return;
+
+    let refBtn;
+    if (info.type === 'scene') {
+      refBtn = card.querySelector('.organized button, .organized-btn');
+    } else if (info.type === 'performer') {
+      refBtn = card.querySelector('.scene-count button');
+    } else if (info.type === 'studio') {
+      refBtn = card.querySelector('.performer-count button');
+    }
+    if (!refBtn) return;
+
+    const parent = refBtn.closest('.btn-group, .card-popovers');
+    if (parent) {
+      const btn = createEmbyButton(info.type, info.id);
+      parent.appendChild(btn);
+    }
   }
 
   // ═══════════════════════════════════════════════════════════
@@ -153,20 +223,12 @@
   }
 
   async function getPluginSettings() {
-    const data = await gql(`
-      query Configuration {
-        configuration { plugins }
-      }
-    `);
-
-    const plugins = data?.configuration?.plugins || {};
-    const cfg = plugins?.[PLUGIN_ID] || {};
-
+    const data = await gql(`query { configuration { plugins } }`);
+    const cfg = data?.configuration?.plugins?.[PLUGIN_ID] || {};
     const get = (k) => {
       const v = cfg[k];
       return (v && typeof v === 'object' && 'value' in v) ? v.value : v;
     };
-
     return {
       embyServer: (get('embyServer') || "").trim().replace(/\/+$/, ""),
       embyInternalServer: (get('embyInternalServer') || "").trim().replace(/\/+$/, ""),
@@ -174,65 +236,42 @@
     };
   }
 
-  async function matchByStashId(settings, stashId) {
-    const data = await gql(`
-      mutation RunPluginOperation($plugin_id: ID!, $args: Map) {
-        runPluginOperation(plugin_id: $plugin_id, args: $args)
-      }
-    `, {
-      plugin_id: PLUGIN_ID,
-      args: {
-        embyServer: settings.embyServer,
-        embyInternalServer: settings.embyInternalServer,
-        embyApiKey: settings.embyApiKey,
-        stash_id: stashId.toString(),
-      },
-    });
-
-    const output = data?.runPluginOperation;
-    if (!output) return { error: "后端无响应" };
-
-    const parsed = typeof output === 'string' ? JSON.parse(output) : output;
-    const result = parsed.output || parsed;
-
-    if (result?.success && result?.url) {
-      console.log("[open_in_emby] ✅", result.item?.name);
-      return { url: result.url, item: result.item };
-    }
-    console.log("[open_in_emby] ❌", result?.error);
-    return { error: result?.error || "未知错误" };
-  }
-
   // ═══════════════════════════════════════════════════════════
-  // 模块 3: 初始化和路由监听
+  // 模块 3: 初始化和监听
   // ═══════════════════════════════════════════════════════════
 
-  function handleLocation() {
-    const sceneId = getSceneId();
+  function init() {
+    initCSS();
 
-    if (!sceneId) {
-      return;
+    // 首次执行
+    addSceneDetailButton();
+    addPerformerStudioButton();
+    document.querySelectorAll('.scene-card, .performer-card, .studio-card').forEach(addCardButton);
+
+    // 路由监听（页面切换）
+    if (window.PluginApi?.Event?.addEventListener) {
+      PluginApi.Event.addEventListener("stash:location", () => {
+        setTimeout(() => {
+          addSceneDetailButton();
+          addPerformerStudioButton();
+        }, 200);
+      });
     }
 
-    let tries = 0;
-    const maxTries = 40;
-    const tick = () => {
-      tries += 1;
-      const ok = createButton();
-      if (!ok && tries < maxTries) {
-        setTimeout(tick, 100);
-      }
-    };
-    tick();
-  }
+    // DOM 监听（刷新/动态加载）
+    const observer = new MutationObserver(() => {
+      addSceneDetailButton();
+      addPerformerStudioButton();
 
-  handleLocation();
-
-  if (window.PluginApi?.Event?.addEventListener) {
-    PluginApi.Event.addEventListener("stash:location", () => {
-      setTimeout(handleLocation, 200);
+      document.querySelectorAll('.scene-card, .performer-card, .studio-card')
+        .forEach(card => {
+          if (!card.querySelector('.open-in-emby-btn')) {
+            addCardButton(card);
+          }
+        });
     });
-  } else {
-    setInterval(handleLocation, 2000);  // 2 秒轮询一次
+    observer.observe(document.body, { childList: true, subtree: true });
   }
+
+  init();
 })();

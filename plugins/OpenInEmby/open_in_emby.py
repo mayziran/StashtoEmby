@@ -14,11 +14,11 @@ import urllib.parse
 import urllib.error
 
 
-def query_emby(emby_server: str, emby_internal_server: str, emby_api_key: str, stash_id: str) -> dict:
+def query_emby(emby_server: str, emby_internal_server: str, emby_api_key: str, stash_id: str, include_item_types: str = "Movie") -> dict:
     """通过 Stash 本地 ID 匹配 Emby 视频"""
     formatted_id = f"stash.{stash_id}"
     params = urllib.parse.urlencode({
-        "IncludeItemTypes": "Movie",
+        "IncludeItemTypes": include_item_types,
         "AnyProviderIdEquals": formatted_id,
         "Recursive": "True",
         "api_key": emby_api_key,
@@ -86,6 +86,7 @@ def main():
     emby_internal_server = args.get("embyInternalServer", "")
     emby_api_key = args.get("embyApiKey", "")
     stash_id = args.get("stash_id")
+    include_item_types = args.get("includeItemTypes", "Movie")
 
     # 验证参数
     if not stash_id:
@@ -97,7 +98,7 @@ def main():
         return
 
     # 查询 Emby
-    result = query_emby(emby_server, emby_internal_server, emby_api_key, str(stash_id))
+    result = query_emby(emby_server, emby_internal_server, emby_api_key, str(stash_id), include_item_types)
 
     # 输出结果
     print(json.dumps({"output": result}))

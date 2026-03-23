@@ -1,6 +1,6 @@
 name: Open in Emby
-description: 在场景页面工具栏添加按钮，通过 Stash ID 匹配 Emby 视频并跳转
-version: "1.0.0"
+description: 在场景/演员/工作室详情页和卡片添加按钮，通过 Stash ID 匹配 Emby 并跳转
+version: "1.1.0"
 url: https://github.com/mayziran/StashtoEmby/tree/master/plugins/OpenInEmby
 
 ui:

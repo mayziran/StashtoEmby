@@ -61,11 +61,11 @@
 
 ### Open in Emby
 
-在场景页面工具栏添加"Open in Emby"按钮，通过 Stash ID 匹配 Emby 中的视频并跳转到详情页。
+在场景/演员/工作室详情页和卡片添加"Open in Emby"按钮，通过 Stash ID 匹配 Emby 中的内容并跳转到详情页。
 
 **功能：**
-- 工具栏按钮，一键跳转到 Emby 详情页
-- 通过 Stash ID 精确匹配 Emby 视频
+- 多位置按钮：场景/演员/工作室详情页和卡片页面
+- 通过 Stash ID 精确匹配 Emby 视频/演员/工作室
 - 支持双地址配置（内网 API 查询 + 外网网页跳转）
 
 **前置依赖：** 需要 Emby 安装 [Jellyfin.Plugin.Stash](https://github.com/DirtyRacer1337/Jellyfin.Plugin.Stash) 插件
