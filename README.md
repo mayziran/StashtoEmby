@@ -1,6 +1,6 @@
 # Stash 对接 Emby 的全套解决方案
 
-为 [Stash](https://github.com/stashapp/stash) 提供插件扩展功能，这是一个开源的媒体整理工具。
+为 [Stash](https://github.com/stashapp/stash) 提供插件扩展功能，这是一个开源的媒体整理工具，本套插件有一套完善的针对emby的搭配设计，建议安装所有相关stash插件和以及需要的俩个emby插件配合使用。
 
 **注意**：本项目中的 AutoMoveOrganized 插件基于 [zyd16888/AutoMoveOrganized](https://github.com/zyd16888/AutoMoveOrganized) 修改而来。
 
@@ -38,7 +38,7 @@
 - 支持批量处理
 - 支持 Hook 模式（自动响应场景更新）和 Task 模式（手动批量处理）
 - 生成 NFO 文件和下载封面图
-- 支持 AI 翻译元数据
+- 🤖 **支持 AI 翻译元数据**（自动翻译场景标题和简介）
 
 [详细文档](https://github.com/mayziran/StashtoEmby/blob/master/plugins/AutoMoveOrganized/README.md)
 
