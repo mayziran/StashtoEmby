@@ -31,8 +31,6 @@
 
     const img = document.createElement("img");
     img.src = ICON_URL;
-    img.alt = "Emby";
-    img.referrerPolicy = "no-referrer";
     img.style.cssText = "display:block;width:1.2em;height:1.2em;";
 
     img.onload = () => { cachedIcon = img.cloneNode(true); };
@@ -87,9 +85,7 @@
     btn.className = "open-in-emby-btn";
     btn.appendChild(getIconNode());
 
-    btn.onclick = async (e) => {
-      e.stopPropagation();
-      e.preventDefault();
+    btn.onclick = async () => {
       try {
         const settings = await getPluginSettings();
         if (!settings.embyServer || !settings.embyInternalServer || !settings.embyApiKey) {
