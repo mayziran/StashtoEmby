@@ -1,6 +1,6 @@
 # Stash 对接 Emby 的全套解决方案
 
-为 [Stash](https://github.com/stashapp/stash) 提供插件扩展功能，这是一个开源的媒体整理工具，本套插件有一套完善的针对emby的搭配设计，建议安装所有相关stash插件和以及需要的俩个emby插件配合使用。
+为 [Stash](https://github.com/stashapp/stash) 提供插件扩展功能，这是一个开源的媒体整理工具，本套插件有一套完善的针对emby的搭配设计，建议安装所有相关stash插件以及需要的俩个emby插件配合使用。
 
 **注意**：本项目中的 AutoMoveOrganized 插件基于 [zyd16888/AutoMoveOrganized](https://github.com/zyd16888/AutoMoveOrganized) 修改而来。
 
