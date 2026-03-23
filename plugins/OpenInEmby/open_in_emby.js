@@ -62,14 +62,9 @@
         align-items: center;
         justify-content: center;
       }
-      .open-in-emby-btn:hover {
-        background: none !important;
-      }
       .open-in-emby-btn img,
       .open-in-emby-btn svg {
         display: block;
-        width: 1.2em;
-        height: 1.2em;
         transition: opacity 0.2s;
       }
       .open-in-emby-btn:hover img,
