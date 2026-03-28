@@ -1,0 +1,11 @@
+name: Performer DB Images
+description: 浏览演员在已配置 StashBox 来源中的外部图片，并可直接设为演员主图
+version: 1.0.0
+ui:
+  javascript:
+    - performer_db_images.js
+  css:
+    - performer_db_images.css
+exec: ["python", "{pluginDir}/performer_db_images.py"]
+interface: raw
+errLog: info

@@ -74,6 +74,21 @@
 
 ---
 
+## 其他插件
+
+### Performer DB Images
+
+为 Stash 演员页面增加一个外部图片浏览器，按来源查看演员在各个 StashBox 数据源中的封面图，并可直接将任意一张设置为当前演员图片。
+
+**功能：**
+- 按演员已有的 `stash_ids` 自动识别可用来源
+- 每个来源单独加载和缓存，支持分页浏览和大图预览
+- 支持直接将外部图片设置为 Stash 演员主图
+
+[详细文档](https://github.com/mayziran/StashtoEmby/blob/master/plugins/Performer-DB-Images/README.md)
+
+---
+
 ## Emby 插件
 
 ### Emby.Plugin.StashBox
